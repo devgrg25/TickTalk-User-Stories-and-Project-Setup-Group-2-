@@ -7,3 +7,4 @@ activated timer creation, audio-haptic feedback on remaining time at request, an
 timer routines such as repeated sets for exercise or pomodoro study. Unlike other timer apps, TickTalk allows the user to
 program specific intervals at which to receive feedback instead of repeatedly having to ask how much time remains, and
 create advanced timers that convey more information aloud such as current set (in the case of timed exercise).
+just to check
