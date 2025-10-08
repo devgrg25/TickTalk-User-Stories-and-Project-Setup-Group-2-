@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'homepage.dart';
+import 'welcome_page.dart';
 
 // CHANGE: Moved color constants outside the class for better organization.
 // These are static values and don't need to be in the build method.
@@ -9,12 +11,23 @@ const Color _primaryColor = Color(0xFFF0B429);    // Warm Amber
 const Color _successColor = Color(0xFF7FB58B);    // Sage Green
 const Color _errorColor = Color(0xFFD96F4E);      // Terracotta
 
-void main() {
-  runApp(const MyApp());
+// The main function is now async
+Future<void> main() async {
+  // Required before using plugins if you need to access them before runApp()
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Get the shared preferences instance
+  final prefs = await SharedPreferences.getInstance();
+  // Check if the user has seen the welcome screen
+  final bool hasSeenWelcome = prefs.getBool('hasSeenWelcome') ?? false;
+
+  runApp(MyApp(hasSeenWelcome: hasSeenWelcome));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+
+  final bool hasSeenWelcome;
+  const MyApp({super.key, required this.hasSeenWelcome});
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +37,7 @@ class MyApp extends StatelessWidget {
     final baseTheme = ThemeData.dark(useMaterial3: true);
 
     return MaterialApp(
-      title: 'Natural Timer App',
+      title: 'Tick Talk',
       debugShowCheckedModeBanner: false,
       theme: baseTheme.copyWith(
         scaffoldBackgroundColor: _backgroundColor,
@@ -59,7 +72,7 @@ class MyApp extends StatelessWidget {
         ),
       ),
       // CHANGE: Added `const` for a performance optimization.
-      home: const HomePage(),
+      home: hasSeenWelcome ? const HomePage() : const WelcomePage(),
     );
   }
 }

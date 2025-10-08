@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'stopwatch_page.dart'; // Import the new stopwatch page
 
 class HomePage extends StatefulWidget {
-  // Use const constructor for widgets that don't change
   const HomePage({super.key});
 
   @override
@@ -9,51 +9,54 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  // State variable to track the selected tab index
+  int _selectedIndex = 0;
+
+  // List of pages to be displayed by the navigation bar
+  static const List<Widget> _pages = <Widget>[
+    StopwatchPage(), // Our new stopwatch page
+    Center(child: Text('Timers Page')), // Placeholder for Timers
+    Center(child: Text('World Clock Page')), // Placeholder for World Clock
+  ];
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        // CHANGE: Increased toolbarHeight to add vertical space
         toolbarHeight: 80,
-        // CHANGE: Moved the PopupMenuButton to the `leading` property for the left side
-        leading: PopupMenuButton(
-          icon: const Icon(Icons.menu), // Added a standard menu icon
-          itemBuilder: (context) => [
-            const PopupMenuItem(child: Text('Settings')),
-            const PopupMenuItem(child: Text('About')),
-          ],
-        ),
         title: const Text('Tick Talk'),
-        centerTitle: false,
-        // CHANGE: The `actions` property is now removed as it's no longer needed
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Welcome to the Timer App!',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 30),
-            ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Timer Started!')),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                textStyle: const TextStyle(fontSize: 18),
-              ),
-              child: const Text('Start'),
-            ),
-          ],
-        ),
+      // Display the selected page from the list
+      body: _pages.elementAt(_selectedIndex),
+      // ADDED: The Bottom Navigation Bar
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: _onItemTapped,
+        // Using a more modern indicator style
+        indicatorColor: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.timer_outlined),
+            selectedIcon: Icon(Icons.timer),
+            label: 'Stopwatch',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.hourglass_empty_outlined),
+            selectedIcon: Icon(Icons.hourglass_empty),
+            label: 'Timers',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.public_outlined),
+            selectedIcon: Icon(Icons.public),
+            label: 'World Clock',
+          ),
+        ],
       ),
     );
   }
