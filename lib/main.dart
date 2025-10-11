@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'home_page.dart'; // make sure this points to your actual home screen file
-// import 'onboarding/welcome_screen.dart'; // adjust if your folder name is different
+import 'home_page.dart'; // Make sure this path matches your folder structure
 
 void main() {
   runApp(const TickTalkApp());
@@ -12,24 +11,19 @@ class TickTalkApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'TickTalk',
       debugShowCheckedModeBanner: false,
-      title: 'TickTalk Timer',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: Colors.white,
-        useMaterial3: false,
+        useMaterial3: true,
+        colorSchemeSeed: const Color(0xFF007BFF),
+        scaffoldBackgroundColor: const Color(0xFFF2F6FA),
       ),
-
-      // 👇 Start at the welcome screen for first launch
-      initialRoute: '/welcome',
-
-      // 👇 Define all your routes here
+      home: const HomeScreen(),
       routes: {
-        '/welcome': (context) => const WelcomeScreen(),
-        '/home': (context) => const HomeScreen(),
-        '/createTimer': (context) => const Placeholder(), // build later
-        '/onboarding': (context) => const Placeholder(), // tutorial placeholder for now
+        '/createTimer': (context) => const Placeholder(), 
+        // 👆 Replace Placeholder() with your actual CreateTimer screen later.
       },
     );
   }
 }
+
