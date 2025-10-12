@@ -111,7 +111,7 @@ You can also say 'repeat' to hear this again.
     await prefs.setBool('hasSeenWelcome', true);
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(builder: (_) => const HomePage()),
     );
   }
 
