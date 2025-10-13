@@ -1,8 +1,73 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✨ ADDED: For SharedPreferences
+import 'package:speech_to_text/speech_to_text.dart';         // ✨ ADDED: For voice commands
+import 'package:speech_to_text/speech_recognition_result.dart';
 import 'settings_page.dart';
 
-class HomeScreen extends StatelessWidget {
+// ✨ CHANGED: Converted to a StatefulWidget to manage listening state
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  // ✨ ADDED: State variables for speech recognition
+  final SpeechToText _speechToText = SpeechToText();
+  bool _isListening = false;
+
+  // ✨ ADDED: Initialize speech recognition in initState
+  @override
+  void initState() {
+    super.initState();
+    _initSpeech();
+  }
+
+  void _initSpeech() async {
+    await _speechToText.initialize();
+  }
+
+  // ✨ ADDED: Functions to start and stop listening
+  void _startListening() async {
+    await _speechToText.listen(onResult: _onSpeechResult);
+    setState(() {
+      _isListening = true;
+    });
+  }
+
+  void _stopListening() async {
+    await _speechToText.stop();
+    setState(() {
+      _isListening = false;
+    });
+  }
+
+  // ✨ ADDED: Callback for when speech is recognized
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    String recognizedText = result.recognizedWords.toLowerCase();
+
+    // Check for the specific voice command
+    if (recognizedText.contains("rerun tutorial")) {
+      _rerunTutorial();
+      _stopListening(); // Stop listening after command is found
+    }
+  }
+
+  // ✨ ADDED: Logic to reset the tutorial flag and show a confirmation
+  void _rerunTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasSeenWelcome', false);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Command recognized! Tutorial will show on next app start.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,6 +76,14 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        // ✨ ADDED: `leading` property for the voice button on the left
+        leading: IconButton(
+          icon: Icon(
+            _isListening ? Icons.mic : Icons.mic_off , // Dynamic icon
+            color: Colors.black,
+          ),
+          onPressed: _isListening ? _stopListening : _startListening, // Toggle listening
+        ),
         title: const Text(
           'TickTalk',
           style: TextStyle(
@@ -25,18 +98,15 @@ class HomeScreen extends StatelessWidget {
             icon: const Icon(Icons.notifications_none, color: Colors.black),
             onPressed: () {},
           ),
-          // FIXED: Correctly implemented PopupMenuButton
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.black), // Added icon
+            icon: const Icon(Icons.more_vert, color: Colors.black),
             onSelected: (String result) {
               if (result == 'settings') {
-                // Import 'package:ticktalk/screens/settings_screen.dart'; at the top of the file.
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const SettingsPage()),
                 );
               }
-              // Add else-if blocks for 'profile' and 'about'
             },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
               const PopupMenuItem<String>(
@@ -63,6 +133,7 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
+      // The rest of your body and bottomNavigationBar remains the same...
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -101,7 +172,6 @@ class HomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // FIXED: auto-sizing scrollable cards
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -162,8 +232,6 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
       ),
-
-      // Bottom Navigation Bar
       bottomNavigationBar: BottomNavigationBar(
         selectedItemColor: const Color(0xFF007BFF),
         unselectedItemColor: Colors.grey,
