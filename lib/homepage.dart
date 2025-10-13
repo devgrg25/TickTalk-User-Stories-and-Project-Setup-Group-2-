@@ -286,3 +286,84 @@ class TimerCard extends StatelessWidget {
     );
   }
 }
+
+//---------------------------------------------
+// Timer Card (unchanged)
+//---------------------------------------------
+class TimerCard extends StatelessWidget {
+  final String title;
+  final String status;
+  final String feedback;
+  final Color color;
+
+  const TimerCard({
+    super.key,
+    required this.title,
+    required this.status,
+    required this.feedback,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style:
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              Container(
+                padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  status,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Feedback: $feedback',
+            style: const TextStyle(fontSize: 14, color: Colors.black54),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                onPressed: () {},
+                icon: const Icon(Icons.play_arrow, color: Colors.black54),
+              ),
+              IconButton(
+                onPressed: () {},
+                icon: const Icon(Icons.edit_outlined, color: Colors.black54),
+              ),
+              IconButton(
+                onPressed: () {},
+                icon: const Icon(Icons.delete_outline, color: Colors.black54),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
