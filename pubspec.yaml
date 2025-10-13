@@ -21,6 +21,14 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
+  flutter_tts: ^3.8.5
+
+  speech_to_text:
+    git:
+      url: https://github.com/csdcorp/speech_to_text.git
+      path: speech_to_text   # <-- important: package is in this subfolder
+      ref: main              # or omit/ref a tag if you prefer
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
