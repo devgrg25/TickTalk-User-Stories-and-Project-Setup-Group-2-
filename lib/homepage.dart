@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ✨ ADDED: For SharedPreferences
-import 'package:speech_to_text/speech_to_text.dart';         // ✨ ADDED: For voice commands
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'settings_page.dart';
 
-// ✨ CHANGED: Converted to a StatefulWidget to manage listening state
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -13,11 +12,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // ✨ ADDED: State variables for speech recognition
   final SpeechToText _speechToText = SpeechToText();
   bool _isListening = false;
 
-  // ✨ ADDED: Initialize speech recognition in initState
   @override
   void initState() {
     super.initState();
@@ -28,62 +25,36 @@ class _HomeScreenState extends State<HomeScreen> {
     await _speechToText.initialize();
   }
 
-  // ✨ ADDED: Functions to start and stop listening
+  // Start listening for voice commands
   void _startListening() async {
     await _speechToText.listen(onResult: _onSpeechResult);
-    setState(() {
-      _isListening = true;
-    });
+    setState(() => _isListening = true);
   }
 
+  // Stop listening
   void _stopListening() async {
     await _speechToText.stop();
-    setState(() {
-      _isListening = false;
-    });
+    setState(() => _isListening = false);
   }
-}
 
-//---------------------------------------------
-// Timer Card (unchanged)
-//---------------------------------------------
-class TimerCard extends StatelessWidget {
-  final String title;
-  final String status;
-  final String feedback;
-  final Color color;
-
-  const TimerCard({
-    super.key,
-    required this.title,
-    required this.status,
-    required this.feedback,
-    required this.color,
-  });
-
-  // ✨ ADDED: Callback for when speech is recognized
-  void _onSpeechResult(SpeechRecognitionResult result) {
+  // Handle speech results
+  void _onSpeechResult(SpeechRecognitionResult result) async {
     String recognizedText = result.recognizedWords.toLowerCase();
 
-    // Check for the specific voice command
     if (recognizedText.contains("rerun tutorial")) {
-      _rerunTutorial();
-      _stopListening(); // Stop listening after command is found
-    }
-  }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('hasSeenWelcome', false);
 
-  // ✨ ADDED: Logic to reset the tutorial flag and show a confirmation
-  void _rerunTutorial() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('hasSeenWelcome', false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Command recognized! Tutorial will show on next app start.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
 
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Command recognized! Tutorial will show on next app start.'),
-          duration: Duration(seconds: 3),
-        ),
-      );
+      _stopListening();
     }
   }
 
@@ -94,13 +65,12 @@ class TimerCard extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        // ✨ ADDED: `leading` property for the voice button on the left
         leading: IconButton(
           icon: Icon(
-            _isListening ? Icons.mic : Icons.mic_off , // Dynamic icon
+            _isListening ? Icons.mic : Icons.mic_off,
             color: Colors.black,
           ),
-          onPressed: _isListening ? _stopListening : _startListening, // Toggle listening
+          onPressed: _isListening ? _stopListening : _startListening,
         ),
         title: const Text(
           'TickTalk',
@@ -151,7 +121,6 @@ class TimerCard extends StatelessWidget {
           ),
         ],
       ),
-      // The rest of your body and bottomNavigationBar remains the same...
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -196,8 +165,7 @@ class TimerCard extends StatelessWidget {
                   children: const [
                     RoutineCard(
                       title: 'Exercise Sets',
-                      description:
-                      'Intervals for strength & cardio training.',
+                      description: 'Intervals for strength & cardio training.',
                       icon: Icons.fitness_center,
                     ),
                     RoutineCard(
@@ -256,11 +224,9 @@ class TimerCard extends StatelessWidget {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.add_circle_outline), label: 'Create'),
+          BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Create'),
           BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Routines'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
+          BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
         ],
       ),
     );
@@ -268,7 +234,7 @@ class TimerCard extends StatelessWidget {
 }
 
 //---------------------------------------------
-// Routine Card (auto-sizing, no overflow)
+// Routine Card
 //---------------------------------------------
 class RoutineCard extends StatelessWidget {
   final String title;
@@ -294,7 +260,7 @@ class RoutineCard extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade300),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min, // 👈 key line (fix overflow)
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: const Color(0xFF007BFF), size: 32),
@@ -330,7 +296,7 @@ class RoutineCard extends StatelessWidget {
 }
 
 //---------------------------------------------
-// Timer Card (unchanged)
+// Timer Card
 //---------------------------------------------
 class TimerCard extends StatelessWidget {
   final String title;
@@ -364,12 +330,10 @@ class TimerCard extends StatelessWidget {
             children: [
               Text(
                 title,
-                style:
-                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
