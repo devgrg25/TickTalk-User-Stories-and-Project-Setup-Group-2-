@@ -4,12 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'welcome_page.dart';
 
 
-// The main function is now async
 Future<void> main() async {
-  // Required before using plugins if you need to access them before runApp()
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Get the shared preferences instance
   final prefs = await SharedPreferences.getInstance();
   // Check if the user has seen the welcome screen
   final bool hasSeenWelcome = prefs.getBool('hasSeenWelcome') ?? false;
