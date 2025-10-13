@@ -42,6 +42,24 @@ class _HomeScreenState extends State<HomeScreen> {
       _isListening = false;
     });
   }
+}
+
+//---------------------------------------------
+// Timer Card (unchanged)
+//---------------------------------------------
+class TimerCard extends StatelessWidget {
+  final String title;
+  final String status;
+  final String feedback;
+  final Color color;
+
+  const TimerCard({
+    super.key,
+    required this.title,
+    required this.status,
+    required this.feedback,
+    required this.color,
+  });
 
   // ✨ ADDED: Callback for when speech is recognized
   void _onSpeechResult(SpeechRecognitionResult result) {
