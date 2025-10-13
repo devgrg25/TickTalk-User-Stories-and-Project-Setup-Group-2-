@@ -1,12 +1,27 @@
 import 'package:flutter/material.dart';
-import 'homepage.dart'; // Make sure this path matches your folder structure
+import 'homepage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'welcome_page.dart';
 
-void main() {
-  runApp(const TickTalkApp());
+
+// The main function is now async
+Future<void> main() async {
+  // Required before using plugins if you need to access them before runApp()
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Get the shared preferences instance
+  final prefs = await SharedPreferences.getInstance();
+  // Check if the user has seen the welcome screen
+  final bool hasSeenWelcome = prefs.getBool('hasSeenWelcome') ?? false;
+  //final bool hasSeenWelcome = false;
+
+  runApp(TickTalkApp(hasSeenWelcome: hasSeenWelcome));
 }
 
 class TickTalkApp extends StatelessWidget {
-  const TickTalkApp({super.key});
+
+  final bool hasSeenWelcome;
+  const TickTalkApp({super.key, required this.hasSeenWelcome});
 
   @override
   Widget build(BuildContext context) {
@@ -18,9 +33,9 @@ class TickTalkApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF007BFF),
         scaffoldBackgroundColor: const Color(0xFFF2F6FA),
       ),
-      home: const HomeScreen(),
+      home: hasSeenWelcome ? const HomeScreen() : const WelcomePage(),//replace second homescreen once the welcome page is added
       routes: {
-        '/createTimer': (context) => const Placeholder(), 
+        '/createTimer': (context) => const Placeholder(),
         // 👆 Replace Placeholder() with your actual CreateTimer screen later.
       },
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'settings_page.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -23,7 +24,43 @@ class HomeScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.notifications_none, color: Colors.black),
             onPressed: () {},
-          )
+          ),
+          // FIXED: Correctly implemented PopupMenuButton
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.black), // Added icon
+            onSelected: (String result) {
+              if (result == 'settings') {
+                // Import 'package:ticktalk/screens/settings_screen.dart'; at the top of the file.
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SettingsPage()),
+                );
+              }
+              // Add else-if blocks for 'profile' and 'about'
+            },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
+                value: 'about',
+                child: Row(
+                  children: [
+                    Icon(Icons.chrome_reader_mode_outlined),
+                    SizedBox(width: 10),
+                    Text("About"),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String>(
+                value: 'settings',
+                child: Row(
+                  children: [
+                    Icon(Icons.settings_outlined),
+                    SizedBox(width: 10),
+                    Text("Settings"),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: SafeArea(

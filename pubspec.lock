@@ -91,11 +91,27 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_tts:
+    dependency: "direct main"
+    description:
+      name: flutter_tts
+      sha256: cbb3fd43b946e62398560235469e6113e4fe26c40eab1b7cb5e7c417503fb3a8
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.8.5"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
     source: sdk
     version: "0.0.0"
+  json_annotation:
+    dependency: transitive
+    description:
+      name: json_annotation
+      sha256: "1ce844379ca14835a50d2f019a3099f419082cfdd231cd86a142af94dd5c6bb1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.9.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -269,6 +285,31 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.10.1"
+  speech_to_text:
+    dependency: "direct main"
+    description:
+      path: speech_to_text
+      ref: main
+      resolved-ref: "7cae851ba4c459ef3850619637461961887cc2cd"
+      url: "https://github.com/csdcorp/speech_to_text.git"
+    source: git
+    version: "7.4.0-beta.6"
+  speech_to_text_platform_interface:
+    dependency: transitive
+    description:
+      name: speech_to_text_platform_interface
+      sha256: "13cbc1ec2cbf4963ec2f3a690a0b93b302fabcefa64b9a123ba8a5818008f9f4"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.0-beta.2"
+  speech_to_text_windows:
+    dependency: transitive
+    description:
+      name: speech_to_text_windows
+      sha256: "050a82d167e10b01246e25962179718579773a73475126ec5531e6bb8c3a91e3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.1-beta.12"
   stack_trace:
     dependency: transitive
     description:
