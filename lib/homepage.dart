@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'settings_page.dart';
+import 'stopwatcht2us2.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,6 +16,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final SpeechToText _speechToText = SpeechToText();
   bool _isListening = false;
+  final FlutterTts _tts = FlutterTts();
 
   @override
   void initState() {
@@ -22,39 +25,115 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _initSpeech() async {
-    await _speechToText.initialize();
-  }
+    try {
+      bool available = await _speechToText.initialize(
+        onStatus: (status) {
+          print("🎙️ Speech status: $status");
+          // Auto-restart listening when it stops
+          if (status == 'notListening' && _isListening) {
+            Future.delayed(const Duration(milliseconds: 300), _startListening);
+          }
+        },
+        onError: (error) {
+          print("⚠️ Speech error: $error");
+          // Restart on error
+          if (_isListening) {
+            Future.delayed(const Duration(milliseconds: 500), _startListening);
+          }
+        },
+      );
 
-  // Start listening for voice commands
-  void _startListening() async {
-    await _speechToText.listen(onResult: _onSpeechResult);
-    setState(() => _isListening = true);
-  }
-
-  // Stop listening
-  void _stopListening() async {
-    await _speechToText.stop();
-    setState(() => _isListening = false);
-  }
-
-  // Handle speech results
-  void _onSpeechResult(SpeechRecognitionResult result) async {
-    String recognizedText = result.recognizedWords.toLowerCase();
-
-    if (recognizedText.contains("rerun tutorial")) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('hasSeenWelcome', false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Command recognized! Tutorial will show on next app start.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
+      if (available) {
+        print("✅ Speech recognition initialized");
+        _startListening(); // Auto-start listening
+      } else {
+        print("❌ Speech recognition not available");
       }
+    } catch (e) {
+      print("❌ Error: $e");
+    }
+  }
 
+  void _startListening() async {
+    if (_isListening) return;
+    try {
+      setState(() => _isListening = true);
+      await _speechToText.listen(
+        onResult: _onSpeechResult,
+        localeId: 'en_US',
+      );
+    } catch (e) {
+      print("Error starting listening: $e");
+      setState(() => _isListening = false);
+      // Retry after delay
+      Future.delayed(const Duration(seconds: 1), _startListening);
+    }
+  }
+
+  void _stopListening() async {
+    try {
+      await _speechToText.stop();
+      setState(() => _isListening = false);
+    } catch (e) {
+      print("Error stopping listening: $e");
+    }
+  }
+
+  Future<void> _speak(String text) async {
+    try {
+      await _tts.setLanguage('en-US');
+      await _tts.setSpeechRate(0.5); // Reduced from 0.9 to 0.5 for slower speech
+      await _tts.speak(text);
+    } catch (e) {
+      print("TTS error: $e");
+    }
+  }
+
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    String recognizedText = result.recognizedWords.toLowerCase();
+    print("🎤 Recognized: $recognizedText");
+
+    // Stopwatch command
+    if (recognizedText.contains("hey tick talk") &&
+        recognizedText.contains("start the stopwatch") ||
+        recognizedText.contains("start stopwatch") ||
+        recognizedText.contains("start the stopwatch")) {
+      _speak("Starting stopwatch.");
+      _openStopwatch();
+    }
+
+    // Rerun tutorial command
+    if (recognizedText.contains("rerun tutorial")) {
+      _rerunTutorial();
       _stopListening();
+    }
+  }
+
+  @override
+  void dispose() {
+    _speechToText.cancel();
+    _tts.stop();
+    super.dispose();
+  }
+
+  void _openStopwatch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const StopwatchT2US2()),
+    );
+  }
+
+  void _rerunTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasSeenWelcome', false);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Command recognized! Tutorial will show on next app start.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
     }
   }
 
@@ -67,10 +146,11 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(
-            _isListening ? Icons.mic : Icons.mic_off,
-            color: Colors.black,
+            _isListening ? Icons.mic : Icons.mic_none,
+            color: _isListening ? Colors.red : Colors.black,
           ),
           onPressed: _isListening ? _stopListening : _startListening,
+          tooltip: _isListening ? 'Stop listening' : 'Tap to speak',
         ),
         title: const Text(
           'TickTalk',
@@ -82,6 +162,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.timer, color: Colors.black),
+            onPressed: _openStopwatch,
+            tooltip: 'Open Stopwatch',
+          ),
           IconButton(
             icon: const Icon(Icons.notifications_none, color: Colors.black),
             onPressed: () {},
@@ -146,6 +231,68 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: () => Navigator.pushNamed(context, '/createTimer'),
                 ),
               ),
+              const SizedBox(height: 24),
+
+              // Stopwatch Section
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007BFF),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blue.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.timer, color: Colors.white, size: 28),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Quick Stopwatch',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Start timing instantly',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white70,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _openStopwatch,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF007BFF),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text(
+                          'Open Stopwatch',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: 24),
 
               // Pre-defined Timer Routines
@@ -222,11 +369,19 @@ class _HomeScreenState extends State<HomeScreen> {
         selectedItemColor: const Color(0xFF007BFF),
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
+        onTap: (index) {
+          if (index == 4) {
+            _openStopwatch();
+          }
+        },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Create'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.add_circle_outline), label: 'Create'),
           BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Routines'),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
+          BottomNavigationBarItem(icon: Icon(Icons.timer), label: 'Stopwatch'),
         ],
       ),
     );
@@ -330,10 +485,12 @@ class TimerCard extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style:
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
