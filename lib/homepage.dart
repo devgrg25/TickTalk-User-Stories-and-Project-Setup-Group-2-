@@ -5,6 +5,7 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'settings_page.dart';
 import 'stopwatcht2us2.dart';
+import 'create_timer_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -123,6 +124,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openCreateTimerScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CreateTimerScreen()),
+    );
+  }
+
   void _rerunTutorial() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hasSeenWelcome', false);
@@ -146,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(
-            _isListening ? Icons.mic : Icons.mic_none,
+            _isListening ? Icons.mic : Icons.mic_off,
             color: _isListening ? Colors.red : Colors.black,
           ),
           onPressed: _isListening ? _stopListening : _startListening,
@@ -228,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () => Navigator.pushNamed(context, '/createTimer'),
+                  onPressed: _openCreateTimerScreen,
                 ),
               ),
               const SizedBox(height: 24),
@@ -370,7 +378,9 @@ class _HomeScreenState extends State<HomeScreen> {
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
         onTap: (index) {
-          if (index == 4) {
+          if (index == 1) { // 'Create' is at index 1
+            _openCreateTimerScreen();
+          } else if (index == 4) {
             _openStopwatch();
           }
         },
