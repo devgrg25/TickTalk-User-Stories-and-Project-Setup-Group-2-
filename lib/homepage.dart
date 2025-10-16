@@ -30,14 +30,12 @@ class _HomeScreenState extends State<HomeScreen> {
       bool available = await _speechToText.initialize(
         onStatus: (status) {
           print("🎙️ Speech status: $status");
-          // Auto-restart listening when it stops
           if (status == 'notListening' && _isListening) {
             Future.delayed(const Duration(milliseconds: 300), _startListening);
           }
         },
         onError: (error) {
           print("⚠️ Speech error: $error");
-          // Restart on error
           if (_isListening) {
             Future.delayed(const Duration(milliseconds: 500), _startListening);
           }
@@ -46,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (available) {
         print("✅ Speech recognition initialized");
-        _startListening(); // Auto-start listening
+        _startListening();
       } else {
         print("❌ Speech recognition not available");
       }
@@ -66,7 +64,6 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       print("Error starting listening: $e");
       setState(() => _isListening = false);
-      // Retry after delay
       Future.delayed(const Duration(seconds: 1), _startListening);
     }
   }
@@ -83,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _speak(String text) async {
     try {
       await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(0.5); // Reduced from 0.9 to 0.5 for slower speech
+      await _tts.setSpeechRate(0.5);
       await _tts.speak(text);
     } catch (e) {
       print("TTS error: $e");
@@ -94,7 +91,6 @@ class _HomeScreenState extends State<HomeScreen> {
     String recognizedText = result.recognizedWords.toLowerCase();
     print("🎤 Recognized: $recognizedText");
 
-    // Stopwatch command
     if (recognizedText.contains("hey tick talk") &&
         recognizedText.contains("start the stopwatch") ||
         recognizedText.contains("start stopwatch") ||
@@ -103,7 +99,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _openStopwatch();
     }
 
-    // Rerun tutorial command
     if (recognizedText.contains("rerun tutorial")) {
       _rerunTutorial();
       _stopListening();
@@ -170,11 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.timer, color: Colors.black),
-            onPressed: _openStopwatch,
-            tooltip: 'Open Stopwatch',
-          ),
+          // Stopwatch icon removed here ✅
           IconButton(
             icon: const Icon(Icons.notifications_none, color: Colors.black),
             onPressed: () {},
@@ -241,67 +232,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Stopwatch Section
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF007BFF),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.blue.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.timer, color: Colors.white, size: 28),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'Quick Stopwatch',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Start timing instantly',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white70,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _openStopwatch,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: const Color(0xFF007BFF),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        child: const Text(
-                          'Open Stopwatch',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
+              // ✅ Quick Stopwatch section removed here
 
               // Pre-defined Timer Routines
               const Text(
@@ -378,7 +309,7 @@ class _HomeScreenState extends State<HomeScreen> {
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
         onTap: (index) {
-          if (index == 1) { // 'Create' is at index 1
+          if (index == 1) {
             _openCreateTimerScreen();
           } else if (index == 4) {
             _openStopwatch();
