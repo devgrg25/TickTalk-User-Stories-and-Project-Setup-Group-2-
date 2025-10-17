@@ -3,10 +3,11 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'create_timer_screen.dart'; // To access the TimerData class
+import 'timer_model.dart'; // To access the TimerData class
 
 class CountdownScreen extends StatefulWidget {
   final TimerData timerData;
+  final int startingSet = 1;
 
   const CountdownScreen({super.key, required this.timerData});
 
@@ -19,6 +20,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
   int _currentSeconds = 0;
   int _elapsedTotalSeconds = 0;
   String _currentPhase = 'Work';
+  late int _currentSet;
   bool _isPaused = false;
 
   bool _audioFeedbackOn = true;
@@ -28,6 +30,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
   void initState() {
     super.initState();
     _currentPhase = 'Work';
+    _currentSet = widget.startingSet;
     _currentSeconds =
         min(widget.timerData.workInterval * 60, widget.timerData.totalTime * 60);
     _startTimer();
@@ -43,7 +46,8 @@ class _CountdownScreenState extends State<CountdownScreen> {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
 
-      if (_elapsedTotalSeconds >= widget.timerData.totalTime * 60) {
+      if (_elapsedTotalSeconds >= widget.timerData.totalTime * 60 ||
+          _currentSet > widget.timerData.totalSets) {
         _timer.cancel();
         Navigator.of(context).pop();
         return;
@@ -65,13 +69,18 @@ class _CountdownScreenState extends State<CountdownScreen> {
   }
 
   void _togglePhase() {
-    // UPDATED: Set the phase to 'Break' or 'Work'
+    if (_currentPhase == 'Break') {
+      _currentSet++;
+      if (_currentSet > widget.timerData.totalSets) {
+        return;
+      }
+    }
+
     _currentPhase = (_currentPhase == 'Work') ? 'Break' : 'Work';
 
     final nextPhaseDuration = (_currentPhase == 'Work'
         ? widget.timerData.workInterval
-        : widget.timerData.breakInterval) *
-        60;
+        : widget.timerData.breakInterval) * 60;
 
     final remainingTotalTime =
         (widget.timerData.totalTime * 60) - _elapsedTotalSeconds;
@@ -151,7 +160,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
                 child: Column(
                   children: [
                     Text(
-                      'Set ${widget.timerData.currentSet} of ${widget.timerData.totalSets}',
+                      'Set $_currentSet of ${widget.timerData.totalSets}',
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
