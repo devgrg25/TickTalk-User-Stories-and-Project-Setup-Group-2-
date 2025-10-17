@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'countdown_screen.dart';
+import 'timer_model.dart';
 
 // TimerData class remains the same
+/*
 class TimerData {
   final String name;
   final int totalTime;
@@ -20,9 +22,11 @@ class TimerData {
     required this.totalSets,
   });
 }
+*/
 
 class CreateTimerScreen extends StatefulWidget {
-  const CreateTimerScreen({super.key});
+  final TimerData? existingTimer;
+  const CreateTimerScreen({super.key, this.existingTimer});
 
   @override
   State<CreateTimerScreen> createState() => _CreateTimerScreenState();
@@ -39,10 +43,20 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
   bool _isListening = false;
   String _lastHeard = "Tap the mic and speak a command...";
 
+  // Check if we are in "edit" mode
+  bool get _isEditing => widget.existingTimer != null;
+
   @override
   void initState() {
     super.initState();
     _speech.initialize();
+    // If we are editing, pre-fill the form fields
+    if (_isEditing) {
+      _nameController.text = widget.existingTimer!.name;
+      _workIntervalController.text = widget.existingTimer!.workInterval.toString();
+      _breakIntervalController.text = widget.existingTimer!.breakInterval.toString();
+      _setsController.text = widget.existingTimer!.totalSets.toString();
+    }
   }
 
   @override
@@ -160,6 +174,7 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
 
     // 4. Create the TimerData object.
     final timerData = TimerData(
+      id: _isEditing ? widget.existingTimer!.id : DateTime.now().toIso8601String(),
       name: _nameController.text.isNotEmpty ? _nameController.text : 'My Timer',
       totalTime: calculatedTotalTime, // Use the calculated time
       workInterval: workTime,
@@ -168,13 +183,18 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
       currentSet: 1,
     );
 
+    // 5. Return the saved data to the previous screen (HomeScreen)
+    Navigator.of(context).pop(timerData);
+
     // 5. Navigate to the countdown screen.
+    /*
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => CountdownScreen(timerData: timerData),
       ),
     );
+     */
   }
 
   // --- UI BUILDERS ---
