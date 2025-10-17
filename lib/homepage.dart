@@ -99,7 +99,9 @@ class _HomeScreenState extends State<HomeScreen> {
       _openStopwatch();
     }
 
-    if (recognizedText.contains("rerun tutorial")) {
+    if (recognizedText.contains("rerun tutorial") ||
+        recognizedText.contains("korean tutorial") ||
+        recognizedText.contains("show tutorial again")) {
       _rerunTutorial();
       _stopListening();
     }
