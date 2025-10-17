@@ -1,7 +1,7 @@
 // countdown_screen.dart
 
 import 'dart:async';
-import 'dart:math'; // For min()
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'create_timer_screen.dart'; // To access the TimerData class
 
@@ -17,18 +17,19 @@ class CountdownScreen extends StatefulWidget {
 class _CountdownScreenState extends State<CountdownScreen> {
   late Timer _timer;
   int _currentSeconds = 0;
+  int _elapsedTotalSeconds = 0;
   String _currentPhase = 'Work';
   bool _isPaused = false;
 
-  // --- 1. ADD THIS STATE VARIABLE ---
-  int _elapsedTotalSeconds = 0;
+  bool _audioFeedbackOn = true;
+  bool _hapticFeedbackOn = true;
 
   @override
   void initState() {
     super.initState();
     _currentPhase = 'Work';
-    // Set the first interval, ensuring it's not longer than the total time allowed.
-    _currentSeconds = min(widget.timerData.workInterval * 60, widget.timerData.totalTime * 60);
+    _currentSeconds =
+        min(widget.timerData.workInterval * 60, widget.timerData.totalTime * 60);
     _startTimer();
   }
 
@@ -40,157 +41,230 @@ class _CountdownScreenState extends State<CountdownScreen> {
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      // Master check: if total time is up, stop everything.
+      if (!mounted) return;
+
       if (_elapsedTotalSeconds >= widget.timerData.totalTime * 60) {
         _timer.cancel();
-        // Pop back to the create screen when the total time is finished.
-        if (mounted) Navigator.of(context).pop();
+        Navigator.of(context).pop();
         return;
       }
 
-      // --- 2. INCREMENT THE TOTAL ELAPSED TIME ---
       if (!_isPaused) {
-        setState(() => _elapsedTotalSeconds++);
-      }
-
-      if (_currentSeconds > 0) {
-        if (!_isPaused) {
-          setState(() => _currentSeconds--);
-        }
-      } else {
-        // When a phase ends, toggle to the next one
-        _timer.cancel();
-        _togglePhase();
-        _startTimer();
+        setState(() {
+          _elapsedTotalSeconds++;
+          if (_currentSeconds > 0) {
+            _currentSeconds--;
+          } else {
+            _timer.cancel();
+            _togglePhase();
+            _startTimer();
+          }
+        });
       }
     });
   }
 
   void _togglePhase() {
-    setState(() {
-      _currentPhase = (_currentPhase == 'Work') ? 'Break' : 'Work';
+    // UPDATED: Set the phase to 'Break' or 'Work'
+    _currentPhase = (_currentPhase == 'Work') ? 'Break' : 'Work';
 
-      final nextPhaseDuration = (_currentPhase == 'Work'
-          ? widget.timerData.workInterval
-          : widget.timerData.breakInterval) * 60;
+    final nextPhaseDuration = (_currentPhase == 'Work'
+        ? widget.timerData.workInterval
+        : widget.timerData.breakInterval) *
+        60;
 
-      final remainingTotalTime = (widget.timerData.totalTime * 60) - _elapsedTotalSeconds;
+    final remainingTotalTime =
+        (widget.timerData.totalTime * 60) - _elapsedTotalSeconds;
 
-      // Ensure the next phase doesn't run longer than the remaining total time.
-      _currentSeconds = min(nextPhaseDuration, remainingTotalTime);
-    });
+    _currentSeconds = min(nextPhaseDuration, remainingTotalTime);
   }
 
-  void _pauseOrResumeTimer() {
-    setState(() {
-      _isPaused = !_isPaused;
-    });
-  }
-
-  String get _formattedTime {
-    int minutes = _currentSeconds ~/ 60;
-    int seconds = _currentSeconds % 60;
+  String _formatTime(int totalSeconds) {
+    int minutes = totalSeconds ~/ 60;
+    int seconds = totalSeconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
-    final Color phaseColor = _currentPhase == 'Work' ? Colors.blue.shade600 : Colors.green.shade600;
-    final int totalPhaseSeconds = (_currentPhase == 'Work' ? widget.timerData.workInterval : widget.timerData.breakInterval) * 60;
-    final double phaseProgress = totalPhaseSeconds > 0 ? (_currentSeconds / totalPhaseSeconds).clamp(0.0, 1.0) : 0.0;
+    // --- COLOR PALETTE FROM HomeScreen ---
+    const Color primaryBlue = Color(0xFF007BFF);
+    const Color breakGreen = Colors.green; // Same as 'Completed' status
+    const Color cardBackground = Color(0xFFF9FAFB);
+    const Color cardBorder = Color(0xFFE5E7EB); // Equivalent to grey.shade300
+    const Color inactiveGrey = Colors.grey;
+    const Color textColor = Colors.black;
+    const Color subtextColor = Colors.black54;
 
-    // --- 3. CALCULATE TOTAL PROGRESS AND ADD THE WIDGET ---
-    final double totalProgress = (widget.timerData.totalTime * 60 > 0)
-        ? _elapsedTotalSeconds / (widget.timerData.totalTime * 60)
-        : 0.0;
+    // Determine the active color based on the current phase
+    final Color activeColor = _currentPhase == 'Work' ? primaryBlue : breakGreen;
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(widget.timerData.name),
         backgroundColor: Colors.white,
-        elevation: 1,
-      ),
-      backgroundColor: Colors.grey[100],
-      body: Column( // Changed to Column to easily add the progress bar
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 8.0),
-            child: Column(
-              children: [
-                LinearProgressIndicator(
-                  value: totalProgress,
-                  minHeight: 8,
-                  backgroundColor: Colors.grey.shade300,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.amber.shade700),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Total Progress',
-                  style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
+        elevation: 0,
+        title: const Text('Active Timer', style: TextStyle(color: textColor)),
+        centerTitle: true,
+        leading: const BackButton(color: textColor),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_none_outlined, color: textColor),
+            onPressed: () {},
           ),
-          const Spacer(), // Added to push content to the center
-          Text(
-            _currentPhase,
-            style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: phaseColor),
-          ),
-          const SizedBox(height: 30),
-          SizedBox(
-            width: 250,
-            height: 250,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                CircularProgressIndicator(
-                  value: 1.0 - phaseProgress, // Inverted to "drain"
-                  strokeWidth: 12,
-                  backgroundColor: Colors.grey.shade300,
-                  valueColor: AlwaysStoppedAnimation<Color>(phaseColor),
-                  strokeCap: StrokeCap.round,
-                ),
-                Center(
-                  child: Text(
-                    _formattedTime,
-                    style: const TextStyle(fontSize: 60, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 50),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                iconSize: 50,
-                icon: const Icon(Icons.stop_circle_outlined, color: Colors.redAccent),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              const SizedBox(width: 20),
-              IconButton(
-                iconSize: 70,
-                icon: Icon(_isPaused ? Icons.play_circle_filled : Icons.pause_circle_filled, color: phaseColor),
-                onPressed: _pauseOrResumeTimer,
-              ),
-              const SizedBox(width: 20),
-              IconButton(
-                iconSize: 50,
-                icon: const Icon(Icons.skip_next_outlined),
-                onPressed: () {
-                  _timer.cancel();
-                  _togglePhase();
-                  _startTimer();
-                },
-              ),
-            ],
-          ),
-          const Spacer(), // Added for balance
         ],
       ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // "Current Timer" card
+            Card(
+              elevation: 0,
+              color: cardBackground,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: cardBorder)),
+              child: ListTile(
+                title: const Text('Current Timer', style: TextStyle(fontSize: 12, color: subtextColor)),
+                subtitle: Text(
+                  widget.timerData.name,
+                  style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textColor),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Main timer display card
+            Card(
+              elevation: 0,
+              color: cardBackground,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: cardBorder)),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 32.0),
+                child: Column(
+                  children: [
+                    Text(
+                      'Set ${widget.timerData.currentSet} of ${widget.timerData.totalSets}',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: textColor.withOpacity(0.7)),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _formatTime(_currentSeconds),
+                      style: const TextStyle(
+                          fontSize: 80,
+                          fontWeight: FontWeight.bold,
+                          color: textColor),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(widget.timerData.totalTime * 60)}',
+                      style: TextStyle(
+                          fontSize: 16,
+                          color: textColor.withOpacity(0.7)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Feedback controls card
+            Card(
+              elevation: 0,
+              color: cardBackground,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: cardBorder)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildFeedbackToggle(
+                      icon: Icons.volume_up_outlined,
+                      label: 'Audio Feedback',
+                      isOn: _audioFeedbackOn,
+                      onChanged: (value) {
+                        setState(() => _audioFeedbackOn = value);
+                      },
+                    ),
+                    _buildFeedbackToggle(
+                      icon: Icons.vibration_outlined,
+                      label: 'Haptic Feedback',
+                      isOn: _hapticFeedbackOn,
+                      onChanged: (value) {
+                        setState(() => _hapticFeedbackOn = value);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const Spacer(),
+
+            // "Tap to Speak" button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.mic, size: 24),
+                label: const Text(
+                  'Tap to Speak',
+                  style: TextStyle(fontSize: 18),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: activeColor, // UPDATED: Dynamic color
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper widget for the feedback toggles
+  Widget _buildFeedbackToggle({
+    required IconData icon,
+    required String label,
+    required bool isOn,
+    required ValueChanged<bool> onChanged,
+  }) {
+    // UPDATED: Using the color palette from HomeScreen
+    const Color primaryBlue = Color(0xFF007BFF);
+    const Color inactiveGrey = Colors.grey;
+
+    return Column(
+      children: [
+        Icon(
+          icon,
+          color: isOn ? primaryBlue : inactiveGrey,
+        ),
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+        Switch(
+          value: isOn,
+          onChanged: onChanged,
+          activeTrackColor: primaryBlue.withOpacity(0.3),
+          activeColor: primaryBlue,
+        ),
+      ],
     );
   }
 }
