@@ -6,6 +6,9 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'settings_page.dart';
 import 'stopwatcht2us2.dart';
 import 'create_timer_screen.dart';
+import 'dart:convert';
+import 'timer_model.dart';
+import 'countdown_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,10 +22,94 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isListening = false;
   final FlutterTts _tts = FlutterTts();
 
+  List<TimerData> _timers = [];
+  static const String _timersKey = 'saved_timers_list';
+
   @override
   void initState() {
     super.initState();
+    _loadTimers();
     _initSpeech();
+  }
+
+  // Load timers from SharedPreferences
+  Future<void> _loadTimers() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? timersString = prefs.getString(_timersKey);
+    if (timersString != null) {
+      final List<dynamic> timerJson = jsonDecode(timersString);
+      setState(() {
+        _timers = timerJson.map((json) => TimerData.fromJson(json)).toList();
+      });
+    }
+  }
+
+  // Save the current list of timers to SharedPreferences
+  Future<void> _saveTimers() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String timersString = jsonEncode(_timers.map((timer) => timer.toJson()).toList());
+    await prefs.setString(_timersKey, timersString);
+  }
+
+  // Add or update a timer in the list
+  void _addOrUpdateTimer(TimerData timer) {
+    final index = _timers.indexWhere((t) => t.id == timer.id);
+    setState(() {
+      if (index != -1) {
+        // This is an update
+        _timers[index] = timer;
+      } else {
+        // This is a new timer
+        _timers.add(timer);
+      }
+    });
+    _saveTimers(); // Persist changes
+  }
+
+  // Delete a timer
+  void _deleteTimer(String timerId) {
+    setState(() {
+      _timers.removeWhere((timer) => timer.id == timerId);
+    });
+    _saveTimers(); // Persist changes
+  }
+
+  // --- NAVIGATION METHODS ---
+
+  // Navigate to create screen for a NEW timer
+  void _openCreateTimerScreen() async {
+    final result = await Navigator.push<TimerData>(
+      context,
+      MaterialPageRoute(builder: (_) => const CreateTimerScreen()),
+    );
+    // If a new timer was created and returned, add it to our list
+    if (result != null) {
+      _addOrUpdateTimer(result);
+    }
+  }
+
+  // Navigate to create screen to EDIT an existing timer
+  void _editTimer(TimerData timerToEdit) async {
+    final result = await Navigator.push<TimerData>(
+      context,
+      MaterialPageRoute(builder: (_) => CreateTimerScreen(existingTimer: timerToEdit)),
+    );
+    // If the timer was edited and returned, update it in our list
+    if (result != null) {
+      _addOrUpdateTimer(result);
+    }
+  }
+
+  // Navigate to the countdown screen to PLAY a timer
+  void _playTimer(TimerData timerToPlay) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        // Pass the whole timer object directly.
+        // The CountdownScreen will handle the sets internally.
+        builder: (_) => CountdownScreen(timerData: timerToPlay),
+      ),
+    );
   }
 
   void _initSpeech() async {
@@ -30,15 +117,15 @@ class _HomeScreenState extends State<HomeScreen> {
       bool available = await _speechToText.initialize(
         onStatus: (status) {
           print("🎙️ Speech status: $status");
-          if (status == 'notListening' && _isListening) {
-            Future.delayed(const Duration(milliseconds: 300), _startListening);
+          if (status == 'notListening') {
+            // Update the UI to show the mic is off.
+            setState(() => _isListening = false);
           }
         },
         onError: (error) {
           print("⚠️ Speech error: $error");
-          if (_isListening) {
-            Future.delayed(const Duration(milliseconds: 500), _startListening);
-          }
+          // Also ensure the mic icon is off if an error occurs.
+          setState(() => _isListening = false);
         },
       );
 
@@ -99,7 +186,9 @@ class _HomeScreenState extends State<HomeScreen> {
       _openStopwatch();
     }
 
-    if (recognizedText.contains("rerun tutorial")) {
+    if (recognizedText.contains("rerun tutorial") ||
+        recognizedText.contains("korean tutorial") ||
+        recognizedText.contains("show tutorial again")) {
       _rerunTutorial();
       _stopListening();
     }
@@ -116,13 +205,6 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const StopwatchT2US2()),
-    );
-  }
-
-  void _openCreateTimerScreen() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const CreateTimerScreen()),
     );
   }
 
@@ -211,40 +293,24 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Create New Timer Button
+              // Create New Timer Button (functionality is now updated)
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.add_circle_outline, size: 24),
-                  label: const Text(
-                    'Create New Timer',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
+                  label: const Text('Create New Timer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF007BFF),
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: _openCreateTimerScreen,
                 ),
               ),
               const SizedBox(height: 24),
-
-              // ✅ Quick Stopwatch section removed here
-
-              // Pre-defined Timer Routines
-              const Text(
-                'Pre-defined Timer Routines',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black87,
-                ),
-              ),
+              // Pre-defined Routines section remains the same...
+              const Text('Pre-defined Timer Routines', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)),
               const SizedBox(height: 12),
-
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -262,43 +328,37 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 24),
 
-              // Your Timers
-              const Text(
-                'Your Timers',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black87,
-                ),
-              ),
+              // --- DYNAMIC "YOUR TIMERS" SECTION ---
+              const Text('Your Timers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)),
               const SizedBox(height: 12),
 
-              const TimerCard(
-                title: 'Morning Workout',
-                status: 'Active',
-                feedback: 'Audio + Haptic',
-                color: Color(0xFF007BFF),
-              ),
-              const TimerCard(
-                title: 'Cooking Timer',
-                status: 'Paused',
-                feedback: 'Audio Only',
-                color: Colors.grey,
-              ),
-              const TimerCard(
-                title: 'Meditation',
-                status: 'Completed',
-                feedback: 'Haptic Only',
-                color: Colors.green,
-              ),
-              const TimerCard(
-                title: 'Study Break',
-                status: 'Paused',
-                feedback: 'Audio + Haptic',
-                color: Colors.grey,
+              // If there are no timers, show a message. Otherwise, build the list.
+              _timers.isEmpty
+                  ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32.0),
+                  child: Text("You haven't created any timers yet.", style: TextStyle(color: Colors.grey)),
+                ),
+              )
+                  : ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _timers.length,
+                itemBuilder: (context, index) {
+                  final timer = _timers[index];
+                  return TimerCard(
+                    title: timer.name,
+                    status: 'Ready', // Status can be enhanced later
+                    feedback: 'Audio + Haptic', // This can also be saved in TimerData
+                    color: const Color(0xFF007BFF),
+                    // --- WIRE UP THE BUTTONS ---
+                    onPlay: () => _playTimer(timer),
+                    onEdit: () => _editTimer(timer),
+                    onDelete: () => _deleteTimer(timer.id),
+                  );
+                },
               ),
             ],
           ),
@@ -399,6 +459,9 @@ class TimerCard extends StatelessWidget {
   final String status;
   final String feedback;
   final Color color;
+  final VoidCallback onPlay;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   const TimerCard({
     super.key,
@@ -406,6 +469,9 @@ class TimerCard extends StatelessWidget {
     required this.status,
     required this.feedback,
     required this.color,
+    required this.onPlay,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   @override
@@ -444,26 +510,14 @@ class TimerCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            'Feedback: $feedback',
-            style: const TextStyle(fontSize: 14, color: Colors.black54),
-          ),
+          Text('Feedback: $feedback', style: const TextStyle(fontSize: 14, color: Colors.black54)),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.play_arrow, color: Colors.black54),
-              ),
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.edit_outlined, color: Colors.black54),
-              ),
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.delete_outline, color: Colors.black54),
-              ),
+              IconButton(onPressed: onPlay, icon: const Icon(Icons.play_arrow, color: Colors.black54)),
+              IconButton(onPressed: onEdit, icon: const Icon(Icons.edit_outlined, color: Colors.black54)),
+              IconButton(onPressed: onDelete, icon: const Icon(Icons.delete_outline, color: Colors.redAccent)), // Made delete icon red for clarity
             ],
           ),
         ],
