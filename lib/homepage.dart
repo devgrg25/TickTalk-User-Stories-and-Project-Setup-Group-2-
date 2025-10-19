@@ -4,11 +4,12 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'settings_page.dart';
-import 'stopwatcht2us2.dart';
+import 'stopwatch_normal_mode.dart';
 import 'create_timer_screen.dart';
 import 'dart:convert';
 import 'timer_model.dart';
 import 'countdown_screen.dart';
+import 'stopwatchmodeselecter.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -56,14 +57,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final index = _timers.indexWhere((t) => t.id == timer.id);
     setState(() {
       if (index != -1) {
-        // This is an update
         _timers[index] = timer;
       } else {
-        // This is a new timer
         _timers.add(timer);
       }
     });
-    _saveTimers(); // Persist changes
+    _saveTimers();
   }
 
   // Delete a timer
@@ -71,10 +70,8 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _timers.removeWhere((timer) => timer.id == timerId);
     });
-    _saveTimers(); // Persist changes
+    _saveTimers();
   }
-
-  // --- NAVIGATION METHODS ---
 
   // Navigate to create screen for a NEW timer
   void _openCreateTimerScreen() async {
@@ -82,7 +79,6 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => const CreateTimerScreen()),
     );
-    // If a new timer was created and returned, add it to our list
     if (result != null) {
       _addOrUpdateTimer(result);
     }
@@ -94,7 +90,6 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => CreateTimerScreen(existingTimer: timerToEdit)),
     );
-    // If the timer was edited and returned, update it in our list
     if (result != null) {
       _addOrUpdateTimer(result);
     }
@@ -105,8 +100,6 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        // Pass the whole timer object directly.
-        // The CountdownScreen will handle the sets internally.
         builder: (_) => CountdownScreen(timerData: timerToPlay),
       ),
     );
@@ -118,20 +111,17 @@ class _HomeScreenState extends State<HomeScreen> {
         onStatus: (status) {
           print("🎙️ Speech status: $status");
           if (status == 'notListening') {
-            // Update the UI to show the mic is off.
             setState(() => _isListening = false);
           }
         },
         onError: (error) {
           print("⚠️ Speech error: $error");
-          // Also ensure the mic icon is off if an error occurs.
           setState(() => _isListening = false);
         },
       );
 
       if (available) {
         print("✅ Speech recognition initialized");
-        _startListening();
       } else {
         print("❌ Speech recognition not available");
       }
@@ -144,14 +134,19 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isListening) return;
     try {
       setState(() => _isListening = true);
+
+      // Provide audio feedback
+      await _speak("Listening");
+
       await _speechToText.listen(
         onResult: _onSpeechResult,
         localeId: 'en_US',
+        listenMode: ListenMode.confirmation,
+        partialResults: true,
       );
     } catch (e) {
       print("Error starting listening: $e");
       setState(() => _isListening = false);
-      Future.delayed(const Duration(seconds: 1), _startListening);
     }
   }
 
@@ -159,6 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await _speechToText.stop();
       setState(() => _isListening = false);
+      await _speak("Stopped listening");
     } catch (e) {
       print("Error stopping listening: $e");
     }
@@ -167,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _speak(String text) async {
     try {
       await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(0.5);
+      await _tts.setSpeechRate(0.9);
       await _tts.speak(text);
     } catch (e) {
       print("TTS error: $e");
@@ -178,12 +174,26 @@ class _HomeScreenState extends State<HomeScreen> {
     String recognizedText = result.recognizedWords.toLowerCase();
     print("🎤 Recognized: $recognizedText");
 
+    // FIXED: Only act on final results to prevent multiple triggers
+    if (!result.finalResult) return;
+
+    // Start stopwatch command - directly open Normal Mode with auto-start
+    // Voice commands bypass the mode selector for quick access
+    if (recognizedText.contains("start") &&
+        (recognizedText.contains("stopwatch") || recognizedText.contains("stop watch"))) {
+      _stopListening(); // Turn off mic FIRST
+      _speak("Starting stopwatch");
+      _openNormalStopwatch(autoStart: true);
+      return;
+    }
+
     if (recognizedText.contains("hey tick talk") &&
-        recognizedText.contains("start the stopwatch") ||
-        recognizedText.contains("start stopwatch") ||
-        recognizedText.contains("start the stopwatch")) {
-      _speak("Starting stopwatch.");
-      _openStopwatch();
+        (recognizedText.contains("start the stopwatch") ||
+            recognizedText.contains("start stopwatch"))) {
+      _stopListening(); // Turn off mic FIRST
+      _speak("Starting stopwatch");
+      _openNormalStopwatch(autoStart: true);
+      return;
     }
 
     if (recognizedText.contains("rerun tutorial") ||
@@ -201,10 +211,19 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _openStopwatch() {
+  // Open Normal Mode stopwatch directly (used for voice commands with auto-start)
+  void _openNormalStopwatch({bool autoStart = false}) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const StopwatchT2US2()),
+      MaterialPageRoute(builder: (_) => StopwatchNormalMode(autoStart: autoStart)),
+    );
+  }
+
+  // Open the stopwatch mode selector (used for manual navigation)
+  void _openStopwatchSelector() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const StopwatchModeSelector()),
     );
   }
 
@@ -229,14 +248,6 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            _isListening ? Icons.mic : Icons.mic_off,
-            color: _isListening ? Colors.red : Colors.black,
-          ),
-          onPressed: _isListening ? _stopListening : _startListening,
-          tooltip: _isListening ? 'Stop listening' : 'Tap to speak',
-        ),
         title: const Text(
           'TickTalk',
           style: TextStyle(
@@ -247,7 +258,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         centerTitle: true,
         actions: [
-          // Stopwatch icon removed here ✅
           IconButton(
             icon: const Icon(Icons.notifications_none, color: Colors.black),
             onPressed: () {},
@@ -293,7 +303,85 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Create New Timer Button (functionality is now updated)
+              // ====== LARGE ACCESSIBLE MIC BUTTON ======
+              Center(
+                child: Semantics(
+                  label: _isListening
+                      ? 'Voice control is active. Double tap to stop listening'
+                      : 'Voice control button. Double tap to start listening for commands like start stopwatch',
+                  button: true,
+                  hint: 'Say start stopwatch or rerun tutorial',
+                  enabled: true,
+                  child: GestureDetector(
+                    onTap: _isListening ? _stopListening : _startListening,
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _isListening ? Colors.red : const Color(0xFF007BFF),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (_isListening ? Colors.red : const Color(0xFF007BFF))
+                                .withOpacity(0.5),
+                            blurRadius: 30,
+                            spreadRadius: 8,
+                          ),
+                        ],
+                        border: Border.all(
+                          color: Colors.white,
+                          width: 4,
+                        ),
+                      ),
+                      child: Icon(
+                        _isListening ? Icons.mic : Icons.mic_none,
+                        color: Colors.white,
+                        size: 60,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Center(
+                child: Text(
+                  _isListening ? '🎤 LISTENING' : 'TAP TO SPEAK',
+                  style: TextStyle(
+                    color: _isListening ? Colors.red : Colors.black87,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: (_isListening ? Colors.red : const Color(0xFF007BFF)).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(
+                      color: (_isListening ? Colors.red : const Color(0xFF007BFF)).withOpacity(0.3),
+                      width: 2,
+                    ),
+                  ),
+                  child: Text(
+                    _isListening
+                        ? 'I\'m listening for your command...'
+                        : 'Say: "start stopwatch"',
+                    style: TextStyle(
+                      color: _isListening ? Colors.red : const Color(0xFF007BFF),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Create New Timer Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -308,7 +396,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-              // Pre-defined Routines section remains the same...
+
+              // Pre-defined Routines section
               const Text('Pre-defined Timer Routines', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)),
               const SizedBox(height: 12),
               SingleChildScrollView(
@@ -330,11 +419,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 24),
 
-              // --- DYNAMIC "YOUR TIMERS" SECTION ---
+              // Your Timers section
               const Text('Your Timers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)),
               const SizedBox(height: 12),
 
-              // If there are no timers, show a message. Otherwise, build the list.
               _timers.isEmpty
                   ? const Center(
                 child: Padding(
@@ -350,10 +438,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   final timer = _timers[index];
                   return TimerCard(
                     title: timer.name,
-                    status: 'Ready', // Status can be enhanced later
-                    feedback: 'Audio + Haptic', // This can also be saved in TimerData
+                    status: 'Ready',
+                    feedback: 'Audio + Haptic',
                     color: const Color(0xFF007BFF),
-                    // --- WIRE UP THE BUTTONS ---
                     onPlay: () => _playTimer(timer),
                     onEdit: () => _editTimer(timer),
                     onDelete: () => _deleteTimer(timer.id),
@@ -372,16 +459,15 @@ class _HomeScreenState extends State<HomeScreen> {
           if (index == 1) {
             _openCreateTimerScreen();
           } else if (index == 4) {
-            _openStopwatch();
+            // FIXED: Now opens the mode selector instead of going directly to Normal Mode
+            _openStopwatchSelector();
           }
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.add_circle_outline), label: 'Create'),
+          BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Create'),
           BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Routines'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
+          BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
           BottomNavigationBarItem(icon: Icon(Icons.timer), label: 'Stopwatch'),
         ],
       ),
@@ -492,12 +578,10 @@ class TimerCard extends StatelessWidget {
             children: [
               Text(
                 title,
-                style:
-                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
@@ -517,7 +601,7 @@ class TimerCard extends StatelessWidget {
             children: [
               IconButton(onPressed: onPlay, icon: const Icon(Icons.play_arrow, color: Colors.black54)),
               IconButton(onPressed: onEdit, icon: const Icon(Icons.edit_outlined, color: Colors.black54)),
-              IconButton(onPressed: onDelete, icon: const Icon(Icons.delete_outline, color: Colors.redAccent)), // Made delete icon red for clarity
+              IconButton(onPressed: onDelete, icon: const Icon(Icons.delete_outline, color: Colors.redAccent)),
             ],
           ),
         ],
