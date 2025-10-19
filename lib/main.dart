@@ -3,6 +3,7 @@ import 'homepage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'welcome_page.dart';
 import 'stopwatcht2us2.dart';                       // Stopwatch feature screen
+import 'stopwatchmodeselecter.dart';
 
 
 
@@ -35,7 +36,7 @@ class TickTalkApp extends StatelessWidget {
       home: hasSeenWelcome ? const HomeScreen() : const WelcomePage(),//replace second homescreen once the welcome page is added
       routes: {
         '/createTimer': (context) => const Placeholder(),
-        '/stopwatch': (context) => const StopwatchT2US2(),
+        '/stopwatch': (context) => const StopwatchModeSelector(),
         // 👆 Replace Placeholder() with your actual CreateTimer screen later.
       },
     );
