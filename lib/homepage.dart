@@ -170,6 +170,64 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Helper function for quick feedback
+  void _showSnackbar(String message) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  // --- TIMER ROUTINE IMPLEMENTATIONS ---
+
+  // Mindfulness Minute
+  void _startMindfulnessMinute() async {
+    _stopListening();
+    _speak("Starting Mindfulness Minute. Find a comfortable position.");
+    _showSnackbar('Phase 1: 30 seconds of focused breathing.');
+    await Future.delayed(const Duration(seconds: 5));
+    _speak("Time's up. Phase two: Now, for fifteen seconds, notice any sounds around you.");
+    _showSnackbar('Phase 2: 15 seconds of silence/listening.');
+    await Future.delayed(const Duration(seconds: 5));
+    _speak("Mindfulness Minute complete. Return to your daily activity.");
+    _showSnackbar('Mindfulness Minute complete.');
+    _startListening();
+  }
+
+  // Simple Laundry Cycle
+  void _startSimpleLaundryCycle() async {
+    _stopListening();
+    _speak("Starting Simple Laundry Cycle. Time to load the clothes.");
+    _showSnackbar('Phase 1: 2 minutes to load clothes and start the wash.');
+    await Future.delayed(const Duration(seconds: 5));
+    _speak("Phase two: Wash cycle complete. You have three minutes to transfer clothes to the dryer.");
+    _showSnackbar('Phase 2: 3 minutes to transfer to dryer.');
+    await Future.delayed(const Duration(seconds: 5));
+    _speak("Transfer time is over. Drying cycle complete. Time to sort the laundry for storage!");
+    _showSnackbar('Laundry cycle complete.');
+    _startListening();
+  }
+
+  // 20-20-20 Rule (Placeholder for full implementation)
+  void _start202020Rule() async {
+    _stopListening();
+    _speak("Starting 20-20-20 rule. You will be reminded every 20 minutes to take a break.");
+    // In a real app, this would set a repeating timer.
+    _showSnackbar('20-20-20 Rule started! Reminder in 20 minutes.');
+    await Future.delayed(const Duration(seconds: 5));
+    _speak("20-20-20 break now. Turn away from your focus area and rest your eyes for 20 seconds.");
+    _showSnackbar('20-second break: Turn away and rest.');
+    await Future.delayed(const Duration(seconds: 5));
+    _speak("Break over. Return to work. Next reminder in 20 minutes.");
+    _startListening();
+  }
+
+  // --- END TIMER ROUTINE IMPLEMENTATIONS ---
+
   void _onSpeechResult(SpeechRecognitionResult result) {
     String recognizedText = result.recognizedWords.toLowerCase();
     print("🎤 Recognized: $recognizedText");
@@ -196,9 +254,30 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+
+    // NEW STT COMMANDS
+    if (recognizedText.contains("hey tick talk") &&
+        recognizedText.contains("start mindfulness")) {
+      _startMindfulnessMinute();
+    }
+
+    if (recognizedText.contains("hey tick talk") &&
+        recognizedText.contains("start laundry")) {
+      _startSimpleLaundryCycle();
+    }
+
+    if (recognizedText.contains("hey tick talk") &&
+        recognizedText.contains("start 20 20 20")) {
+      _start202020Rule();
+    }
+
+    // Rerun tutorial command
+    if (recognizedText.contains("rerun tutorial")) {
+
     if (recognizedText.contains("rerun tutorial") ||
         recognizedText.contains("korean tutorial") ||
         recognizedText.contains("show tutorial again")) {
+ main
       _rerunTutorial();
       _stopListening();
     }
@@ -403,16 +482,57 @@ class _HomeScreenState extends State<HomeScreen> {
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: const [
+                  children: [
+                    // Existing Routines
                     RoutineCard(
                       title: 'Exercise Sets',
                       description: 'Intervals for strength & cardio training.',
                       icon: Icons.fitness_center,
+                      onPressed: () {},
                     ),
                     RoutineCard(
                       title: 'Pomodoro Focus',
                       description: '25-min work, 5-min break cycles.',
                       icon: Icons.timer_outlined,
+                      onPressed: () {},
+                    ),
+
+                    // --- NEW ACCESSIBILITY ROUTINES ---
+
+                    // Mindfulness Minute (Functional)
+                    RoutineCard(
+                      title: 'Mindfulness Minute',
+                      description: 'Structured meditation with spoken intervals.',
+                      icon: Icons.spa_outlined,
+                      onPressed: _startMindfulnessMinute,
+                    ),
+                    // Simple Laundry Cycle (Functional)
+                    RoutineCard(
+                      title: 'Simple Laundry Cycle',
+                      description: 'Timed steps for washing, drying, and sorting items for storage.',
+                      icon: Icons.local_laundry_service_outlined,
+                      onPressed: _startSimpleLaundryCycle,
+                    ),
+                    // Morning Independence (Placeholder)
+                    RoutineCard(
+                      title: 'Morning Independence',
+                      description: '3 min wash, 2 min dress, 5 min eat cycle.',
+                      icon: Icons.wb_sunny_outlined,
+                      onPressed: () {},
+                    ),
+                    // Recipe Prep Guide (Placeholder)
+                    RoutineCard(
+                      title: 'Recipe Prep Guide',
+                      description: 'Sequential timers for common cooking steps.',
+                      icon: Icons.restaurant_menu,
+                      onPressed: () {},
+                    ),
+                    // The 20-20-20 Rule (UPDATED DESCRIPTION & LINKED)
+                    RoutineCard(
+                      title: 'The 20-20-20 Rule',
+                      description: 'Audible guide for muscle relaxation: turn away from your focus every 20 mins for a 20-second break.',
+                      icon: Icons.remove_red_eye_outlined,
+                      onPressed: _start202020Rule,
                     ),
                   ],
                 ),
@@ -451,6 +571,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+      // RETAINED: Only the Bottom Navigation Bar Stopwatch icon remains
       bottomNavigationBar: BottomNavigationBar(
         selectedItemColor: const Color(0xFF007BFF),
         unselectedItemColor: Colors.grey,
@@ -476,24 +597,27 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 //---------------------------------------------
-// Routine Card
+// Routine Card (Fixed size implemented)
 //---------------------------------------------
 class RoutineCard extends StatelessWidget {
   final String title;
   final String description;
   final IconData icon;
+  final VoidCallback? onPressed;
 
   const RoutineCard({
     super.key,
     required this.title,
     required this.description,
     required this.icon,
+    this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 220,
+      width: 180,
+      height: 250,
       margin: const EdgeInsets.only(right: 16, bottom: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -516,13 +640,17 @@ class RoutineCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            description,
-            style: const TextStyle(fontSize: 13, color: Colors.black54),
+          Expanded(
+            child: Text(
+              description,
+              style: const TextStyle(fontSize: 13, color: Colors.black54),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           const SizedBox(height: 8),
           TextButton(
-            onPressed: () {},
+            onPressed: onPressed ?? () {},
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -538,7 +666,7 @@ class RoutineCard extends StatelessWidget {
 }
 
 //---------------------------------------------
-// Timer Card
+// Timer Card (Unchanged)
 //---------------------------------------------
 class TimerCard extends StatelessWidget {
   final String title;
