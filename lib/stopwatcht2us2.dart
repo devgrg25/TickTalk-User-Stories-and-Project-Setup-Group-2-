@@ -2,7 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter_tts/flutter_tts.dart'; // 👈 added for narration
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_tts/flutter_tts.dart';
+import 'dart:async';
 
 class StopwatchT2US2 extends StatefulWidget {
   const StopwatchT2US2({
@@ -26,7 +28,17 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
   late Ticker _ticker;
   bool _isRunning = false;
 
-  FlutterTts? _tts;
+  // Voice and TTS
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  final FlutterTts _tts = FlutterTts();
+  bool _isListening = false;
+
+  // Lap tracking
+  List<Duration> _laps = [];
+
+  // Time announcement
+  Timer? _announcementTimer;
+  Duration _lastAnnouncedTime = Duration.zero;
 
   @override
   void initState() {
@@ -34,25 +46,18 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
     _stopwatch = Stopwatch();
     _elapsed = Duration.zero;
     _ticker = createTicker(_onTick);
+    _initSpeech();
+    _initTts();
+    // ✅ REMOVED: _start(); - No auto-start
+  }
 
-    if (widget.tutorialMode) {
-      _tts = FlutterTts();
-      Future.microtask(() async {
-        try {
-          await _tts?.setLanguage('en-US');
-          await _tts?.setSpeechRate(0.52);
-          await _tts?.setPitch(1.0);
-          await _tts?.awaitSpeakCompletion(true);
-          await _tts?.speak(
-            'This is the stopwatch. '
-                'Tap Start to begin, Pause to hold, and Reset to clear the time. '
-                'We show minutes, seconds, and centiseconds.',
-          );
-        } catch (_) {}
-      });
-    }
+  void _initSpeech() async {
+    await _speech.initialize();
+  }
 
-    _start(); // Auto-start stopwatch
+  void _initTts() async {
+    await _tts.setLanguage('en-US');
+    await _tts.setSpeechRate(0.5);
   }
 
   void _onTick(Duration duration) {
@@ -60,14 +65,44 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
       setState(() {
         _elapsed = _stopwatch.elapsed;
       });
+      _checkTimeAnnouncement();
     }
+  }
+
+  // ✅ Announce time every 30 seconds
+  void _checkTimeAnnouncement() {
+    final currentSeconds = _elapsed.inSeconds;
+    final lastAnnouncedSeconds = _lastAnnouncedTime.inSeconds;
+
+    if (currentSeconds > 0 &&
+        currentSeconds % 30 == 0 &&
+        currentSeconds != lastAnnouncedSeconds) {
+      _lastAnnouncedTime = _elapsed;
+      _announceTime();
+    }
+  }
+
+  Future<void> _announceTime() async {
+    final minutes = _elapsed.inMinutes;
+    final seconds = _elapsed.inSeconds.remainder(60);
+
+    String announcement;
+    if (minutes > 0) {
+      announcement = "$minutes minute${minutes != 1 ? 's' : ''} and $seconds second${seconds != 1 ? 's' : ''}";
+    } else {
+      announcement = "$seconds second${seconds != 1 ? 's' : ''}";
+    }
+
+    await _tts.speak(announcement);
   }
 
   @override
   void dispose() {
     _ticker.dispose();
     _stopwatch.stop();
-    _tts?.stop();
+    _speech.cancel();
+    _tts.stop();
+    _announcementTimer?.cancel();
     super.dispose();
   }
 
@@ -89,9 +124,16 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
 
   void _reset() {
     _stopwatch.reset();
+    _laps.clear();
+    _lastAnnouncedTime = Duration.zero;
     setState(() => _elapsed = Duration.zero);
+  }
+
+  void _lap() {
     if (_isRunning) {
-      _start();
+      setState(() {
+        _laps.add(_elapsed);
+      });
     }
   }
 
@@ -100,6 +142,38 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
       _stopwatch.start();
       _ticker.start();
       setState(() => _isRunning = true);
+    }
+  }
+
+  // ✅ Voice Command Handling
+  void _toggleListening() async {
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+    } else {
+      setState(() => _isListening = true);
+      await _speech.listen(
+        onResult: (result) {
+          final command = result.recognizedWords.toLowerCase();
+          _handleVoiceCommand(command);
+        },
+      );
+    }
+  }
+
+  void _handleVoiceCommand(String command) {
+    if (command.contains('start')) {
+      _start();
+      _tts.speak('Stopwatch started');
+    } else if (command.contains('stop')) {
+      _stop();
+      _tts.speak('Stopwatch stopped');
+    } else if (command.contains('lap')) {
+      _lap();
+      _tts.speak('Lap recorded');
+    } else if (command.contains('reset')) {
+      _reset();
+      _tts.speak('Stopwatch reset');
     }
   }
 
@@ -118,111 +192,132 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('TickTalk Stopwatch'),
-        backgroundColor: Colors.blueAccent,
+        title: const Text('Stopwatch', style: TextStyle(color: Colors.black)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: const BackButton(color: Colors.black),
+        actions: [
+          // ✅ Mic Button in AppBar
+          IconButton(
+            icon: Icon(
+              _isListening ? Icons.mic : Icons.mic_off,
+              color: _isListening ? Colors.red : Colors.black,
+            ),
+            onPressed: _toggleListening,
+            tooltip: _isListening ? 'Stop listening' : 'Tap to speak',
+          ),
+        ],
       ),
-      body: Stack(
-        children: [
-          // --- Original content ---
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // Timer Display
+            Expanded(
+              flex: 2,
+              child: Center(
+                child: Text(
                   _formatTime(_elapsed),
                   style: const TextStyle(
-                      fontSize: 72, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 40),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildButton(
-                      label: _isRunning ? 'Pause' : 'Start',
-                      onPressed: _isRunning ? _stop : _resume,
-                      color: _isRunning ? Colors.orange : Colors.green,
-                    ),
-                    const SizedBox(width: 16),
-                    _buildButton(
-                      label: 'Reset',
-                      onPressed: () => _reset(),
-                      color: Colors.red,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // --- Tutorial overlay ---
-          if (widget.tutorialMode)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 20,
-              child: Material(
-                borderRadius: BorderRadius.circular(12),
-                elevation: 6,
-                color: Colors.white,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'How this screen works',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        '• Start begins counting; Pause holds the time.\n'
-                            '• Reset clears back to 00:00:00.\n'
-                            '• Time shows minutes : seconds : centiseconds.',
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          TextButton.icon(
-                            onPressed: () async {
-                              try { await _tts?.stop(); } catch (_) {}
-                              widget.onTutorialFinish?.call();
-                            },
-                            icon: const Icon(Icons.check_circle_outline),
-                            label: const Text('Finish Tutorial'),
-                          ),
-                          const Spacer(),
-                          const Icon(Icons.timer_outlined, color: Colors.blue),
-                        ],
-                      ),
-                    ],
+                    fontSize: 72,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace',
                   ),
                 ),
               ),
             ),
-        ],
+
+            // Control Buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildButton(
+                  label: 'Lap',
+                  icon: Icons.flag,
+                  onPressed: _isRunning ? _lap : null,
+                  color: const Color(0xFF007BFF),
+                ),
+                _buildButton(
+                  label: _isRunning ? 'Stop' : 'Start',
+                  icon: _isRunning ? Icons.pause : Icons.play_arrow,
+                  onPressed: _isRunning ? _stop : _start,
+                  color: _isRunning ? Colors.orange : Colors.green,
+                ),
+                _buildButton(
+                  label: 'Reset',
+                  icon: Icons.refresh,
+                  onPressed: _reset,
+                  color: Colors.red,
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Laps List
+            if (_laps.isNotEmpty) ...[
+              const Divider(),
+              const Text(
+                'Laps',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _laps.length,
+                  reverse: true,
+                  itemBuilder: (context, index) {
+                    final lapNumber = _laps.length - index;
+                    final lapTime = _laps[_laps.length - 1 - index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: const Color(0xFF007BFF),
+                        child: Text(
+                          '$lapNumber',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      title: Text(
+                        _formatTime(lapTime),
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 18,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildButton({
     required String label,
-    required VoidCallback onPressed,
+    required IconData icon,
+    required VoidCallback? onPressed,
     required Color color,
   }) {
-    return ElevatedButton(
+    return ElevatedButton.icon(
       onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      ),
-      child: Text(
+      icon: Icon(icon, size: 24),
+      label: Text(
         label,
         style:
         const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        disabledBackgroundColor: Colors.grey.shade300,
       ),
     );
   }

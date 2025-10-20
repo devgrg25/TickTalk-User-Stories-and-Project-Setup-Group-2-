@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'welcome_page.dart';
+import 'stopwatcht2us2.dart';                       // Stopwatch feature screen
+import 'stopwatchmodeselecter.dart';
+
 
 // Screens in your project
 import 'homepage.dart';
@@ -37,10 +41,9 @@ class TickTalkApp extends StatelessWidget {
 
       // Named routes you use from the voice tutorial / app
       routes: {
-        '/home'       : (context) => const HomeScreen(),
-        '/createTimer': (context) => const CreateTimerScreen(),
-        '/stopwatch'  : (context) => const StopwatchT2US2(),
-        '/settings'   : (context) => const SettingsPage(), // timerData is optional in your SettingsPage
+        '/createTimer': (context) => const Placeholder(),
+        '/stopwatch': (context) => const StopwatchModeSelector(),
+        // 👆 Replace Placeholder() with your actual CreateTimer screen later.
       },
     );
   }
