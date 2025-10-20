@@ -1,4 +1,4 @@
-// countdown_screen.dart  (ADDED tutorialMode + overlay + TTS narration; original logic preserved)
+// countdown_screen.dart
 
 import 'dart:async';
 import 'dart:math';
@@ -9,16 +9,7 @@ class CountdownScreen extends StatefulWidget {
   final TimerData timerData;
   final int startingSet = 1;
 
-  // 👇 optional tutorial hooks (non-breaking)
-  final bool tutorialMode;
-  final VoidCallback? onTutorialNext;
-
-  const CountdownScreen({
-    super.key,
-    required this.timerData,
-    this.tutorialMode = false,
-    this.onTutorialNext,
-  });
+  const CountdownScreen({super.key, required this.timerData});
 
   @override
   State<CountdownScreen> createState() => _CountdownScreenState();
@@ -35,9 +26,6 @@ class _CountdownScreenState extends State<CountdownScreen> {
   bool _audioFeedbackOn = true;
   bool _hapticFeedbackOn = true;
 
-  // TTS for tutorial narration
-  FlutterTts? _tts;
-
   @override
   void initState() {
     super.initState();
@@ -51,7 +39,6 @@ class _CountdownScreenState extends State<CountdownScreen> {
   @override
   void dispose() {
     _timer.cancel();
-    _tts?.stop();
     super.dispose();
   }
 

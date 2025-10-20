@@ -1,27 +1,25 @@
 import 'package:flutter/material.dart';
+import 'homepage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'welcome_page.dart';
 import 'stopwatcht2us2.dart';                       // Stopwatch feature screen
 import 'stopwatchmodeselecter.dart';
 
 
-// Screens in your project
-import 'homepage.dart';
-import 'welcome_page.dart';
-import 'create_timer_screen.dart';
-import 'stopwatcht2us2.dart';
-import 'settings_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final prefs = await SharedPreferences.getInstance();
-  final hasSeenWelcome = prefs.getBool('hasSeenWelcome') ?? false;
+  // Check if the user has seen the welcome screen
+  final bool hasSeenWelcome = prefs.getBool('hasSeenWelcome') ?? false;
+  //final bool hasSeenWelcome = false;
 
   runApp(TickTalkApp(hasSeenWelcome: hasSeenWelcome));
 }
 
 class TickTalkApp extends StatelessWidget {
+
   final bool hasSeenWelcome;
   const TickTalkApp({super.key, required this.hasSeenWelcome});
 
@@ -35,11 +33,7 @@ class TickTalkApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF007BFF),
         scaffoldBackgroundColor: const Color(0xFFF2F6FA),
       ),
-
-      // Show Welcome first unless the flag is already set
-      home: hasSeenWelcome ? const HomeScreen() : const WelcomePage(),
-
-      // Named routes you use from the voice tutorial / app
+      home: hasSeenWelcome ? const HomeScreen() : const WelcomePage(),//replace second homescreen once the welcome page is added
       routes: {
         '/createTimer': (context) => const Placeholder(),
         '/stopwatch': (context) => const StopwatchModeSelector(),
@@ -48,3 +42,4 @@ class TickTalkApp extends StatelessWidget {
     );
   }
 }
+
