@@ -12,7 +12,7 @@ dependencies:
     sdk: flutter
 
   shared_preferences: ^2.2.3
-  flutter_tts: ^3.8.5
+  flutter_tts: ^4.2.3
 
   speech_to_text:
     git:
@@ -26,7 +26,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true
