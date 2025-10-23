@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'countdown_screen.dart';
 import 'timer_model.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 // TimerData class remains the same
 /*
@@ -28,12 +29,14 @@ class CreateTimerScreen extends StatefulWidget {
   final TimerData? existingTimer;
   const CreateTimerScreen({super.key, this.existingTimer});
 
+
   @override
   State<CreateTimerScreen> createState() => _CreateTimerScreenState();
 }
 
 class _CreateTimerScreenState extends State<CreateTimerScreen> {
   final _nameController = TextEditingController();
+  late FlutterTts _tts;
   // REMOVED: No longer need a controller for total time.
   // final _totalTimeController = TextEditingController();
   final _workIntervalController = TextEditingController();
@@ -50,6 +53,8 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
   void initState() {
     super.initState();
     _speech.initialize();
+    _tts = FlutterTts();
+    _initTts();
     // If we are editing, pre-fill the form fields
     if (_isEditing) {
       _nameController.text = widget.existingTimer!.name;
@@ -57,6 +62,15 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
       _breakIntervalController.text = widget.existingTimer!.breakInterval.toString();
       _setsController.text = widget.existingTimer!.totalSets.toString();
     }
+  }
+
+  Future<void> _initTts() async {
+    try {
+      await _tts.setLanguage('en-US');
+      await _tts.setPitch(1.0);
+      await _tts.setSpeechRate(0.5);
+      await _tts.awaitSpeakCompletion(true);
+    } catch (_) {}
   }
 
   @override
@@ -67,8 +81,20 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     _workIntervalController.dispose();
     _breakIntervalController.dispose();
     _setsController.dispose();
+    _tts.stop(); // stop any ongoing speech
+    _speech.stop();
+
     super.dispose();
   }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+    _tts.stop(); // stop any ongoing speech
+    _tts.speak(message); // read out the message
+  }
+
 
   void _listen() async {
     if (!_isListening) {
@@ -93,6 +119,10 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
 
   void _parseVoiceCommand(String command) {
     final commandLower = command.toLowerCase();
+
+    final simpleTimerMatch = RegExp(
+        r'(?:start|create)(?: a)?(?: timer)?(?: for)? (\d+)\s*(?:minute|min|mins)?'
+    ).firstMatch(commandLower);
 
     // --- UPDATED: More flexible Regular Expressions ---
 
@@ -130,40 +160,55 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
       _setsController.text = setsMatch.group(1) ?? '';
     }
 
+    // --- NEW: Handle simple timer separately ---
+    if (simpleTimerMatch != null) {
+      final simpleMinutes = int.tryParse(simpleTimerMatch.group(1) ?? '');
+      if (simpleMinutes != null) {
+        Future.delayed(const Duration(milliseconds: 750), () {
+          _speech.stop();
+          setState(() => _isListening = false);
+          _startCountdown(simpleTimerMinutes: simpleMinutes);
+        });
+        return;
+      }
+    }
+
     // --- Auto-start logic ---
 
     // Checks if the command contains a trigger word and essential fields have been filled.
     if (commandLower.contains('start') || commandLower.contains('create')) {
       // A small delay gives the user a moment to see the fields populate before starting.
       Future.delayed(const Duration(milliseconds: 750), () {
-        if (mounted && _workIntervalController.text.isNotEmpty && _setsController.text.isNotEmpty) {
-          _speech.stop();
-          setState(() => _isListening = false);
-          _startCountdown();
-        }
+        _speech.stop();
+        setState(() => _isListening = false);
+        _startCountdown();
       });
     }
   }
 
   // UPDATED: Core logic for starting the timer is changed here.
-  void _startCountdown() {
-    // 1. Get values and provide defaults for optional fields.
-    final workTime = int.tryParse(_workIntervalController.text);
-    final breakTime = int.tryParse(_breakIntervalController.text) ?? 5; // Default break is 5 mins
-    final totalSets = int.tryParse(_setsController.text);
+  void _startCountdown({int? simpleTimerMinutes}) {
 
-    // 2. Validate essential inputs.
-    if (workTime == null || totalSets == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Work interval and number of sets are required.')),
-      );
-      return;
+    int workTime;
+    int breakTime;
+    int totalSets;
+
+    // 1. Get values and provide defaults for optional fields.
+    if (simpleTimerMinutes != null) {
+      // --- Simple timer mode ---
+      workTime = simpleTimerMinutes;
+      breakTime = 0;
+      totalSets = 1;
+    } else {
+        workTime = int.tryParse(_workIntervalController.text) ?? 0;
+        breakTime = int.tryParse(_breakIntervalController.text) ?? 5; // Default break is 5 mins
+        totalSets = int.tryParse(_setsController.text) ?? 0;
     }
 
+
+    // 2. Validate essential inputs.
     if (workTime <= 0 || totalSets <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Work time and sets must be greater than zero.')),
-      );
+      _showMessage('Please provide a valid time or number of sets.');
       return;
     }
 
@@ -175,7 +220,9 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     // 4. Create the TimerData object.
     final timerData = TimerData(
       id: _isEditing ? widget.existingTimer!.id : DateTime.now().toIso8601String(),
-      name: _nameController.text.isNotEmpty ? _nameController.text : 'My Timer',
+      name: _nameController.text.isNotEmpty
+          ? _nameController.text
+          : (simpleTimerMinutes != null ? 'Quick Timer' : 'My Timer'),
       totalTime: calculatedTotalTime, // Use the calculated time
       workInterval: workTime,
       breakInterval: breakTime,
@@ -187,14 +234,14 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     Navigator.of(context).pop(timerData);
 
     // 5. Navigate to the countdown screen.
-    /*
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => CountdownScreen(timerData: timerData),
       ),
     );
-     */
+
   }
 
   // --- UI BUILDERS ---

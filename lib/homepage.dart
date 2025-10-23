@@ -1,39 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:speech_to_text/speech_to_text.dart';
-import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'dart:convert';
+
 import 'settings_page.dart';
 import 'stopwatch_normal_mode.dart';
 import 'create_timer_screen.dart';
-import 'dart:convert';
 import 'timer_model.dart';
 import 'countdown_screen.dart';
 import 'stopwatchmodeselecter.dart';
+import 'voice_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  final SpeechToText _speechToText = SpeechToText();
-  bool _isListening = false;
+class HomeScreenState extends State<HomeScreen> {
   final FlutterTts _tts = FlutterTts();
+  final VoiceController _voiceController = VoiceController();
 
+  bool _isListening = false;
   List<TimerData> _timers = [];
   static const String _timersKey = 'saved_timers_list';
 
   @override
   void initState() {
     super.initState();
-    _loadTimers();
-    _initSpeech();
+    _initPage();
   }
 
-  // Load timers from SharedPreferences
+  Future<void> _initPage() async {
+    await _voiceController.initialize();
+    await _loadTimers();
+    await _tts.speak("You are now on the home page.");
+  }
+
   Future<void> _loadTimers() async {
     final prefs = await SharedPreferences.getInstance();
     final String? timersString = prefs.getString(_timersKey);
@@ -45,14 +49,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Save the current list of timers to SharedPreferences
   Future<void> _saveTimers() async {
     final prefs = await SharedPreferences.getInstance();
-    final String timersString = jsonEncode(_timers.map((timer) => timer.toJson()).toList());
+    final String timersString =
+    jsonEncode(_timers.map((timer) => timer.toJson()).toList());
     await prefs.setString(_timersKey, timersString);
   }
 
-  // Add or update a timer in the list
   void _addOrUpdateTimer(TimerData timer) {
     final index = _timers.indexWhere((t) => t.id == timer.id);
     setState(() {
@@ -65,7 +68,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _saveTimers();
   }
 
-  // Delete a timer
   void _deleteTimer(String timerId) {
     setState(() {
       _timers.removeWhere((timer) => timer.id == timerId);
@@ -73,29 +75,24 @@ class _HomeScreenState extends State<HomeScreen> {
     _saveTimers();
   }
 
-  // Navigate to create screen for a NEW timer
   void _openCreateTimerScreen() async {
     final result = await Navigator.push<TimerData>(
       context,
       MaterialPageRoute(builder: (_) => const CreateTimerScreen()),
     );
-    if (result != null) {
-      _addOrUpdateTimer(result);
-    }
+    if (result != null) _addOrUpdateTimer(result);
   }
 
-  // Navigate to create screen to EDIT an existing timer
   void _editTimer(TimerData timerToEdit) async {
     final result = await Navigator.push<TimerData>(
       context,
-      MaterialPageRoute(builder: (_) => CreateTimerScreen(existingTimer: timerToEdit)),
+      MaterialPageRoute(
+        builder: (_) => CreateTimerScreen(existingTimer: timerToEdit),
+      ),
     );
-    if (result != null) {
-      _addOrUpdateTimer(result);
-    }
+    if (result != null) _addOrUpdateTimer(result);
   }
 
-  // Navigate to the countdown screen to PLAY a timer
   void _playTimer(TimerData timerToPlay) {
     Navigator.push(
       context,
@@ -105,200 +102,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _initSpeech() async {
-    try {
-      bool available = await _speechToText.initialize(
-        onStatus: (status) {
-          print("🎙️ Speech status: $status");
-          if (status == 'notListening') {
-            setState(() => _isListening = false);
-          }
-        },
-        onError: (error) {
-          print("⚠️ Speech error: $error");
-          setState(() => _isListening = false);
-        },
-      );
-
-      if (available) {
-        print("✅ Speech recognition initialized");
-      } else {
-        print("❌ Speech recognition not available");
-      }
-    } catch (e) {
-      print("❌ Error: $e");
-    }
-  }
-
-  void _startListening() async {
-    if (_isListening) return;
-    try {
-      setState(() => _isListening = true);
-
-      // Provide audio feedback
-      await _speak("Listening");
-
-      await _speechToText.listen(
-        onResult: _onSpeechResult,
-        localeId: 'en_US',
-        listenMode: ListenMode.confirmation,
-        partialResults: true,
-      );
-    } catch (e) {
-      print("Error starting listening: $e");
-      setState(() => _isListening = false);
-    }
-  }
-
-  void _stopListening() async {
-    try {
-      await _speechToText.stop();
-      setState(() => _isListening = false);
-      await _speak("Stopped listening");
-    } catch (e) {
-      print("Error stopping listening: $e");
-    }
-  }
-
-  Future<void> _speak(String text) async {
-    try {
-      await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(0.9);
-      await _tts.speak(text);
-    } catch (e) {
-      print("TTS error: $e");
-    }
-  }
-
-  // Helper function for quick feedback
-  void _showSnackbar(String message) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
-  // --- TIMER ROUTINE IMPLEMENTATIONS ---
-
-  // Mindfulness Minute
-  void _startMindfulnessMinute() async {
-    _stopListening();
-    _speak("Starting Mindfulness Minute. Find a comfortable position.");
-    _showSnackbar('Phase 1: 30 seconds of focused breathing.');
-    await Future.delayed(const Duration(seconds: 5));
-    _speak("Time's up. Phase two: Now, for fifteen seconds, notice any sounds around you.");
-    _showSnackbar('Phase 2: 15 seconds of silence/listening.');
-    await Future.delayed(const Duration(seconds: 5));
-    _speak("Mindfulness Minute complete. Return to your daily activity.");
-    _showSnackbar('Mindfulness Minute complete.');
-    _startListening();
-  }
-
-  // Simple Laundry Cycle
-  void _startSimpleLaundryCycle() async {
-    _stopListening();
-    _speak("Starting Simple Laundry Cycle. Time to load the clothes.");
-    _showSnackbar('Phase 1: 2 minutes to load clothes and start the wash.');
-    await Future.delayed(const Duration(seconds: 5));
-    _speak("Phase two: Wash cycle complete. You have three minutes to transfer clothes to the dryer.");
-    _showSnackbar('Phase 2: 3 minutes to transfer to dryer.');
-    await Future.delayed(const Duration(seconds: 5));
-    _speak("Transfer time is over. Drying cycle complete. Time to sort the laundry for storage!");
-    _showSnackbar('Laundry cycle complete.');
-    _startListening();
-  }
-
-  // 20-20-20 Rule (Placeholder for full implementation)
-  void _start202020Rule() async {
-    _stopListening();
-    _speak("Starting 20-20-20 rule. You will be reminded every 20 minutes to take a break.");
-    // In a real app, this would set a repeating timer.
-    _showSnackbar('20-20-20 Rule started! Reminder in 20 minutes.');
-    await Future.delayed(const Duration(seconds: 5));
-    _speak("20-20-20 break now. Turn away from your focus area and rest your eyes for 20 seconds.");
-    _showSnackbar('20-second break: Turn away and rest.');
-    await Future.delayed(const Duration(seconds: 5));
-    _speak("Break over. Return to work. Next reminder in 20 minutes.");
-    _startListening();
-  }
-
-  // --- END TIMER ROUTINE IMPLEMENTATIONS ---
-
-  void _onSpeechResult(SpeechRecognitionResult result) {
-    String recognizedText = result.recognizedWords.toLowerCase();
-    print("🎤 Recognized: $recognizedText");
-
-    // FIXED: Only act on final results to prevent multiple triggers
-    if (!result.finalResult) return;
-
-    // Start stopwatch command - directly open Normal Mode with auto-start
-    // Voice commands bypass the mode selector for quick access
-    if (recognizedText.contains("start") &&
-        (recognizedText.contains("stopwatch") || recognizedText.contains("stop watch"))) {
-      _stopListening(); // Turn off mic FIRST
-      _speak("Starting stopwatch");
-      _openNormalStopwatch(autoStart: true);
-      return;
-    }
-
-    if (recognizedText.contains("hey tick talk") &&
-        (recognizedText.contains("start the stopwatch") ||
-            recognizedText.contains("start stopwatch"))) {
-      _stopListening(); // Turn off mic FIRST
-      _speak("Starting stopwatch");
-      _openNormalStopwatch(autoStart: true);
-      return;
-    }
-
-
-    // NEW STT COMMANDS
-    if (recognizedText.contains("hey tick talk") &&
-        recognizedText.contains("start mindfulness")) {
-      _startMindfulnessMinute();
-    }
-
-    if (recognizedText.contains("hey tick talk") &&
-        recognizedText.contains("start laundry")) {
-      _startSimpleLaundryCycle();
-    }
-
-    if (recognizedText.contains("hey tick talk") &&
-        recognizedText.contains("start 20 20 20")) {
-      _start202020Rule();
-    }
-
-    // Rerun tutorial command
-    if (recognizedText.contains("rerun tutorial")) {
-
-    if (recognizedText.contains("rerun tutorial") ||
-        recognizedText.contains("korean tutorial") ||
-        recognizedText.contains("show tutorial again")) {
- main
-      _rerunTutorial();
-      _stopListening();
-    }
-  }
-
-  @override
-  void dispose() {
-    _speechToText.cancel();
-    _tts.stop();
-    super.dispose();
-  }
-
-  // Open Normal Mode stopwatch directly (used for voice commands with auto-start)
   void _openNormalStopwatch({bool autoStart = false}) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => StopwatchNormalMode(autoStart: autoStart)),
+      MaterialPageRoute(
+        builder: (_) => StopwatchNormalMode(autoStart: autoStart),
+      ),
     );
   }
 
-  // Open the stopwatch mode selector (used for manual navigation)
   void _openStopwatchSelector() {
     Navigator.push(
       context,
@@ -306,62 +118,58 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _rerunTutorial() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('hasSeenWelcome', false);
+  Future<void> _startListening() async {
+    if (_isListening) return;
+    setState(() => _isListening = true);
 
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Command recognized! Tutorial will show on next app start.'),
-          duration: Duration(seconds: 3),
-        ),
-      );
-    }
+    await _voiceController.listenAndRecognize(onComplete: () {
+      if (mounted) {
+        setState(() => _isListening = false);
+      }
+    });
+  }
+
+  Future<void> _stopListening() async {
+    setState(() => _isListening = false);
+    await _voiceController.stopListening();
+  }
+
+  @override
+  void dispose() {
+    _tts.stop();
+    _voiceController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text(
           'TickTalk',
           style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
+              color: Colors.black, fontWeight: FontWeight.bold, fontSize: 20),
         ),
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_none, color: Colors.black),
-            onPressed: () {},
-          ),
+              icon: const Icon(Icons.notifications_none, color: Colors.black),
+              onPressed: () {}),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.black),
             onSelected: (String result) {
               if (result == 'settings') {
                 Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const SettingsPage()),
-                );
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const SettingsPage()));
               }
             },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-              const PopupMenuItem<String>(
-                value: 'about',
-                child: Row(
-                  children: [
-                    Icon(Icons.chrome_reader_mode_outlined),
-                    SizedBox(width: 10),
-                    Text("About"),
-                  ],
-                ),
-              ),
               const PopupMenuItem<String>(
                 value: 'settings',
                 child: Row(
@@ -376,229 +184,195 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+
+      // ----------------------- MAIN BODY ------------------------
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ====== LARGE ACCESSIBLE MIC BUTTON ======
-              Center(
-                child: Semantics(
-                  label: _isListening
-                      ? 'Voice control is active. Double tap to stop listening'
-                      : 'Voice control button. Double tap to start listening for commands like start stopwatch',
-                  button: true,
-                  hint: 'Say start stopwatch or rerun tutorial',
-                  enabled: true,
-                  child: GestureDetector(
-                    onTap: _isListening ? _stopListening : _startListening,
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _isListening ? Colors.red : const Color(0xFF007BFF),
-                        boxShadow: [
-                          BoxShadow(
-                            color: (_isListening ? Colors.red : const Color(0xFF007BFF))
-                                .withOpacity(0.5),
-                            blurRadius: 30,
-                            spreadRadius: 8,
-                          ),
-                        ],
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 4,
-                        ),
-                      ),
-                      child: Icon(
-                        _isListening ? Icons.mic : Icons.mic_none,
-                        color: Colors.white,
-                        size: 60,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 110), // increased from 90
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.add_circle_outline, size: 24),
+                    label: const Text(
+                      'Create New Timer',
+                      style:
+                      TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF007BFF),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
+                    onPressed: _openCreateTimerScreen,
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Center(
-                child: Text(
-                  _isListening ? '🎤 LISTENING' : 'TAP TO SPEAK',
+                const SizedBox(height: 24),
+                const Text(
+                  'Pre-defined Timer Routines',
                   style: TextStyle(
-                    color: _isListening ? Colors.red : Colors.black87,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: (_isListening ? Colors.red : const Color(0xFF007BFF)).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(25),
-                    border: Border.all(
-                      color: (_isListening ? Colors.red : const Color(0xFF007BFF)).withOpacity(0.3),
-                      width: 2,
-                    ),
-                  ),
-                  child: Text(
-                    _isListening
-                        ? 'I\'m listening for your command...'
-                        : 'Say: "start stopwatch"',
-                    style: TextStyle(
-                      color: _isListening ? Colors.red : const Color(0xFF007BFF),
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87),
+                ),
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      RoutineCard(
+                        title: 'Mindfulness Minute',
+                        description:
+                        'Structured meditation with spoken intervals.',
+                        icon: Icons.spa_outlined,
+                        onPressed: () async {
+                          await _tts.speak(
+                              "Starting Mindfulness Minute. Relax and focus on your breathing.");
+                        },
+                      ),
+                      RoutineCard(
+                        title: 'Simple Laundry Cycle',
+                        description:
+                        'Timed steps for washing, drying, and sorting items.',
+                        icon: Icons.local_laundry_service_outlined,
+                        onPressed: () async {
+                          await _tts.speak(
+                              "Starting Simple Laundry Cycle. Begin by loading your clothes.");
+                        },
+                      ),
+                      RoutineCard(
+                        title: 'The 20-20-20 Rule',
+                        description:
+                        'Reminds you to rest your eyes every 20 minutes.',
+                        icon: Icons.remove_red_eye_outlined,
+                        onPressed: () async {
+                          await _tts.speak(
+                              "Starting 20-20-20 rule. Remember to take regular eye breaks.");
+                        },
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 32),
+                const SizedBox(height: 24),
+                const Text(
+                  'Your Timers',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87),
+                ),
+                const SizedBox(height: 12),
+                _timers.isEmpty
+                    ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: Text(
+                      "You haven't created any timers yet.",
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                )
+                    : ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.only(bottom: 40),
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _timers.length,
+                  itemBuilder: (context, index) {
+                    final timer = _timers[index];
+                    return TimerCard(
+                      title: timer.name,
+                      status: 'Ready',
+                      feedback: 'Audio + Haptic',
+                      color: const Color(0xFF007BFF),
+                      onPlay: () => _playTimer(timer),
+                      onEdit: () => _editTimer(timer),
+                      onDelete: () => _deleteTimer(timer.id),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
 
-              // Create New Timer Button
-              SizedBox(
+      // ----------------------- BOTTOM MIC BAR ------------------------
+      bottomSheet: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            BottomNavigationBar(
+              selectedItemColor: const Color(0xFF007BFF),
+              unselectedItemColor: Colors.grey,
+              type: BottomNavigationBarType.fixed,
+              onTap: (index) {
+                if (index == 1) {
+                  _openCreateTimerScreen();
+                } else if (index == 4) {
+                  _openStopwatchSelector();
+                }
+              },
+              items: const [
+                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.add_circle_outline), label: 'Create'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.list_alt), label: 'Routines'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.timer), label: 'Stopwatch'),
+              ],
+            ),
+            GestureDetector(
+              onTap: _isListening ? _stopListening : _startListening,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                color: _isListening
+                    ? Colors.redAccent
+                    : const Color(0xFF007BFF),
                 width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.add_circle_outline, size: 24),
-                  label: const Text('Create New Timer', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF007BFF),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: _openCreateTimerScreen,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Pre-defined Routines section
-              const Text('Pre-defined Timer Routines', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)),
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                    vertical: 28), // doubled tap area here
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Existing Routines
-                    RoutineCard(
-                      title: 'Exercise Sets',
-                      description: 'Intervals for strength & cardio training.',
-                      icon: Icons.fitness_center,
-                      onPressed: () {},
+                    Icon(
+                      _isListening ? Icons.mic : Icons.mic_off,
+                      color: Colors.white,
                     ),
-                    RoutineCard(
-                      title: 'Pomodoro Focus',
-                      description: '25-min work, 5-min break cycles.',
-                      icon: Icons.timer_outlined,
-                      onPressed: () {},
-                    ),
-
-                    // --- NEW ACCESSIBILITY ROUTINES ---
-
-                    // Mindfulness Minute (Functional)
-                    RoutineCard(
-                      title: 'Mindfulness Minute',
-                      description: 'Structured meditation with spoken intervals.',
-                      icon: Icons.spa_outlined,
-                      onPressed: _startMindfulnessMinute,
-                    ),
-                    // Simple Laundry Cycle (Functional)
-                    RoutineCard(
-                      title: 'Simple Laundry Cycle',
-                      description: 'Timed steps for washing, drying, and sorting items for storage.',
-                      icon: Icons.local_laundry_service_outlined,
-                      onPressed: _startSimpleLaundryCycle,
-                    ),
-                    // Morning Independence (Placeholder)
-                    RoutineCard(
-                      title: 'Morning Independence',
-                      description: '3 min wash, 2 min dress, 5 min eat cycle.',
-                      icon: Icons.wb_sunny_outlined,
-                      onPressed: () {},
-                    ),
-                    // Recipe Prep Guide (Placeholder)
-                    RoutineCard(
-                      title: 'Recipe Prep Guide',
-                      description: 'Sequential timers for common cooking steps.',
-                      icon: Icons.restaurant_menu,
-                      onPressed: () {},
-                    ),
-                    // The 20-20-20 Rule (UPDATED DESCRIPTION & LINKED)
-                    RoutineCard(
-                      title: 'The 20-20-20 Rule',
-                      description: 'Audible guide for muscle relaxation: turn away from your focus every 20 mins for a 20-second break.',
-                      icon: Icons.remove_red_eye_outlined,
-                      onPressed: _start202020Rule,
+                    const SizedBox(width: 8),
+                    Text(
+                      _isListening
+                          ? "Listening... Tap to stop"
+                          : "Tap to Speak",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-
-              // Your Timers section
-              const Text('Your Timers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)),
-              const SizedBox(height: 12),
-
-              _timers.isEmpty
-                  ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32.0),
-                  child: Text("You haven't created any timers yet.", style: TextStyle(color: Colors.grey)),
-                ),
-              )
-                  : ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _timers.length,
-                itemBuilder: (context, index) {
-                  final timer = _timers[index];
-                  return TimerCard(
-                    title: timer.name,
-                    status: 'Ready',
-                    feedback: 'Audio + Haptic',
-                    color: const Color(0xFF007BFF),
-                    onPlay: () => _playTimer(timer),
-                    onEdit: () => _editTimer(timer),
-                    onDelete: () => _deleteTimer(timer.id),
-                  );
-                },
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ),
-      // RETAINED: Only the Bottom Navigation Bar Stopwatch icon remains
-      bottomNavigationBar: BottomNavigationBar(
-        selectedItemColor: const Color(0xFF007BFF),
-        unselectedItemColor: Colors.grey,
-        type: BottomNavigationBarType.fixed,
-        onTap: (index) {
-          if (index == 1) {
-            _openCreateTimerScreen();
-          } else if (index == 4) {
-            // FIXED: Now opens the mode selector instead of going directly to Normal Mode
-            _openStopwatchSelector();
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Create'),
-          BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Routines'),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
-          BottomNavigationBarItem(icon: Icon(Icons.timer), label: 'Stopwatch'),
-        ],
       ),
     );
   }
 }
 
-//---------------------------------------------
-// Routine Card (Fixed size implemented)
-//---------------------------------------------
+// ---------------------------------------------
+// RoutineCard
+// ---------------------------------------------
 class RoutineCard extends StatelessWidget {
   final String title;
   final String description;
@@ -626,27 +400,19 @@ class RoutineCard extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade300),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: const Color(0xFF007BFF), size: 32),
           const SizedBox(height: 12),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
           const SizedBox(height: 6),
           Expanded(
-            child: Text(
-              description,
-              style: const TextStyle(fontSize: 13, color: Colors.black54),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: Text(description,
+                style: const TextStyle(fontSize: 13, color: Colors.black54),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis),
           ),
           const SizedBox(height: 8),
           TextButton(
@@ -665,9 +431,9 @@ class RoutineCard extends StatelessWidget {
   }
 }
 
-//---------------------------------------------
-// Timer Card (Unchanged)
-//---------------------------------------------
+// ---------------------------------------------
+// TimerCard
+// ---------------------------------------------
 class TimerCard extends StatelessWidget {
   final String title;
   final String status;
@@ -701,37 +467,36 @@ class TimerCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text(title,
+                style:
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(color: color, fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
+              child: Text(status,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+            ),
+          ]),
           const SizedBox(height: 8),
-          Text('Feedback: $feedback', style: const TextStyle(fontSize: 14, color: Colors.black54)),
+          Text('Feedback: $feedback',
+              style: const TextStyle(fontSize: 14, color: Colors.black54)),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              IconButton(onPressed: onPlay, icon: const Icon(Icons.play_arrow, color: Colors.black54)),
-              IconButton(onPressed: onEdit, icon: const Icon(Icons.edit_outlined, color: Colors.black54)),
-              IconButton(onPressed: onDelete, icon: const Icon(Icons.delete_outline, color: Colors.redAccent)),
-            ],
-          ),
+          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            IconButton(
+                onPressed: onPlay,
+                icon: const Icon(Icons.play_arrow, color: Colors.black54)),
+            IconButton(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined, color: Colors.black54)),
+            IconButton(
+                onPressed: onDelete,
+                icon:
+                const Icon(Icons.delete_outline, color: Colors.redAccent)),
+          ]),
         ],
       ),
     );
