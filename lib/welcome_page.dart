@@ -304,7 +304,7 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          _listening ? Icons.mic : Icons.mic_none,
+                          _listening ? Icons.mic : Icons.mic_off,
                           color: Colors.white,
                         ),
                         const SizedBox(width: 8),
@@ -314,8 +314,8 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
                               : "Tap to Speak",
                           style: const TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
