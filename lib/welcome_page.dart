@@ -22,14 +22,13 @@ class _WelcomePageState extends State<WelcomePage> {
   bool _speechReady = false;
   bool _ttsReady = false;
   String _lastHeard = '…';
-  int _retryCount = 0;
-  static const int _maxRetries = 3;
+  bool _ttsSpeaking = false;
 
   final _welcomeText = """
 Welcome to TickTalk. I'll guide you through setup and features step by step.
 Say 'start tutorial' to begin or 'skip' to use the app.
 You can also say 'repeat' to hear this again.
-Try saying 'hey ticktalk start the stopwatch' to open the stopwatch.
+Try saying 'start the stopwatch' to open the stopwatch.
 """;
 
   @override
@@ -47,7 +46,7 @@ Try saying 'hey ticktalk start the stopwatch' to open the stopwatch.
 
     try {
       await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(0.5); // Reduced from 0.9 to 0.5 for slower speech
+      await _tts.setSpeechRate(0.5);
       await _tts.setPitch(1.0);
       setState(() => _ttsReady = true);
     } catch (e) {
@@ -58,51 +57,40 @@ Try saying 'hey ticktalk start the stopwatch' to open the stopwatch.
 
     if (mounted) {
       await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) {
-        await _playWelcome();
-      }
+      if (mounted) await _playWelcome();
     }
   }
 
   Future<void> _playWelcome() async {
     await _speak(_welcomeText);
-    await _startListening();
   }
 
   Future<void> _speak(String text) async {
     if (!_ttsReady) return;
     try {
+      _ttsSpeaking = true;
       await _tts.stop();
-      await _tts.setSpeechRate(0.5); // Reduced from 0.9 to 0.5 for slower speech
+      await _tts.setSpeechRate(0.5);
       await _tts.speak(text);
+      _ttsSpeaking = false;
     } catch (e) {
       debugPrint('❌ TTS speak error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not play audio: $e')),
-        );
-      }
     }
   }
 
   Future<void> _ensureSpeech() async {
     if (_speechReady) return;
-
     try {
       _speechReady = await _speech.initialize(
         onStatus: (s) {
-          if (!mounted) return;
           debugPrint('🎙️ Speech status: $s');
           if (s == 'notListening' && _listening) {
-            _handleListeningStop();
+            setState(() => _listening = false);
           }
         },
         onError: (error) {
           debugPrint('⚠️ Speech error: $error');
-          if (!mounted) return;
-          if (_listening) {
-            _handleListeningStop();
-          }
+          setState(() => _listening = false);
         },
       );
       if (mounted) setState(() {});
@@ -112,9 +100,8 @@ Try saying 'hey ticktalk start the stopwatch' to open the stopwatch.
   }
 
   Future<void> _startListening() async {
-    if (!_speechReady || _listening) return;
+    if (!_speechReady || _listening || _ttsSpeaking) return;
 
-    _retryCount = 0;
     setState(() => _listening = true);
 
     try {
@@ -123,72 +110,56 @@ Try saying 'hey ticktalk start the stopwatch' to open the stopwatch.
         listenMode: stt.ListenMode.confirmation,
         partialResults: true,
         onResult: (res) {
-          if (!mounted) return;
           final words = (res.recognizedWords ?? '').toLowerCase().trim();
           if (words.isEmpty) return;
 
           setState(() => _lastHeard = words);
-          _handle(words);
+          _handleCommand(words);
         },
       );
     } catch (e) {
       debugPrint('❌ Listen error: $e');
-      if (mounted) {
-        setState(() => _listening = false);
-      }
+      setState(() => _listening = false);
     }
   }
 
-  void _handleListeningStop() {
-    if (_retryCount < _maxRetries) {
-      _retryCount++;
-      _restartListen();
-    } else {
-      if (mounted) {
-        setState(() => _listening = false);
-        debugPrint('❌ Max retries reached');
-      }
-    }
+  Future<void> _stopListening() async {
+    setState(() => _listening = false);
+    await _speech.stop();
   }
 
-  void _restartListen() async {
-    await Future.delayed(const Duration(milliseconds: 250));
-    if (!mounted) return;
-    _startListening();
-  }
-
-  Future<void> _handle(String words) async {
+  Future<void> _handleCommand(String words) async {
     bool has(String s) => words.contains(s);
 
-    if (has('repeat')) {
-      await _speech.cancel();
-      await _speak(_welcomeText);
-      _restartListen();
-      return;
-    }
+    // prevent it from hearing itself
+    if (_ttsSpeaking) return;
 
-    // ✨ ADDED: Stopwatch command from welcome page
-    if (has('hey tick talk') && has('start the stopwatch') ||
-        has('hey tick talk') && has('start stopwatch') ||
-        has('start the stopwatch') ||
-        has('open stopwatch')) {
-      await _speak("Starting stopwatch.");
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const StopwatchT2US2()),
-        );
-      }
+    if (has('repeat')) {
+      await _stopListening();
+      await _speak(_welcomeText);
       return;
     }
 
     if (has('start tutorial') || has('start')) {
+      await _stopListening();
       await _markSeenAndGoHome();
       return;
     }
 
     if (has('skip')) {
+      await _stopListening();
       await _markSeenAndGoHome();
       return;
+    }
+
+    if (has('stopwatch') || has('start stopwatch')) {
+      await _stopListening();
+      await _speak("Opening stopwatch.");
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const StopwatchT2US2()),
+        );
+      }
     }
   }
 
@@ -201,9 +172,18 @@ Try saying 'hey ticktalk start the stopwatch' to open the stopwatch.
     }
 
     if (!mounted) return;
+
+    // Delay navigation slightly so speech completes first
+    await _tts.stop();
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
+
+    // Say this once homepage loads
+    Future.delayed(const Duration(seconds: 1), () async {
+      await _tts.speak("You are now on the home page.");
+    });
   }
 
   @override
@@ -217,13 +197,14 @@ Try saying 'hey ticktalk start the stopwatch' to open the stopwatch.
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: SingleChildScrollView(
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  const SizedBox(height: 60),
                   Text(
                     'Welcome to TickTalk!',
                     style: Theme.of(context).textTheme.headlineMedium,
@@ -234,16 +215,13 @@ Try saying 'hey ticktalk start the stopwatch' to open the stopwatch.
                     style: TextStyle(fontSize: 18),
                   ),
                   const SizedBox(height: 24),
-
-                  // Voice hints
                   const Text(
-                    'Say: "start tutorial" • "skip" • "repeat"\n"hey ticktalk start the stopwatch"',
+                    'Say: "start tutorial" • "skip" • "repeat"\n"start stopwatch"',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                    style:
+                    TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                   ),
                   const SizedBox(height: 24),
-
-                  // Listening status card
                   Card(
                     elevation: 2,
                     child: Padding(
@@ -267,10 +245,7 @@ Try saying 'hey ticktalk start the stopwatch' to open the stopwatch.
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
-                  // Last heard transcript
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -297,51 +272,58 @@ Try saying 'hey ticktalk start the stopwatch' to open the stopwatch.
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 24),
-
-                  // Web controls
-                  if (kIsWeb) ...[
-                    FilledButton.icon(
-                      onPressed: _ttsReady ? _playWelcome : null,
-                      icon: const Icon(Icons.volume_up),
-                      label: const Text('Play Welcome'),
-                    ),
-                    const SizedBox(height: 8),
-                    FilledButton.icon(
-                      onPressed: _speechReady
-                          ? () async {
-                        await _startListening();
-                      }
-                          : null,
-                      icon: const Icon(Icons.mic),
-                      label: const Text('Start Listening'),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-
-                  // Manual tap listener
                   OutlinedButton.icon(
                     onPressed: _speechReady && !_listening
-                        ? () async {
-                      await _startListening();
-                    }
+                        ? _startListening
                         : null,
                     icon: const Icon(Icons.mic),
                     label: const Text('Tap to Listen'),
                   ),
-
                   const SizedBox(height: 8),
-
-                  // Skip button
                   OutlinedButton(
                     onPressed: _markSeenAndGoHome,
                     child: const Text('Skip for Now'),
                   ),
+                  const SizedBox(height: 80),
                 ],
               ),
             ),
-          ),
+            // bottom mic bar like homepage
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: GestureDetector(
+                onTap: _listening ? _stopListening : _startListening,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  color:
+                  _listening ? Colors.redAccent : const Color(0xFF007BFF),
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _listening ? Icons.mic : Icons.mic_none,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _listening
+                            ? "Listening... Tap to stop"
+                            : "Tap to Speak",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
