@@ -9,7 +9,15 @@ class CountdownScreen extends StatefulWidget {
   final TimerData timerData;
   final int startingSet = 1;
 
-  const CountdownScreen({super.key, required this.timerData});
+  final bool tutorialMode;
+  final VoidCallback? onTutorialNext;
+
+  const CountdownScreen({
+    super.key,
+    required this.timerData,
+    this.tutorialMode = false,
+    this.onTutorialNext,
+  });
 
   @override
   State<CountdownScreen> createState() => _CountdownScreenState();
