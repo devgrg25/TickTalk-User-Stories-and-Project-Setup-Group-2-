@@ -1,28 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'countdown_screen.dart';
 import 'timer_model.dart';
-
-// TimerData class remains the same
-/*
-class TimerData {
-  final String name;
-  final int totalTime;
-  final int workInterval;
-  final int breakInterval;
-  final int currentSet;
-  final int totalSets;
-
-  TimerData({
-    required this.name,
-    required this.totalTime,
-    required this.workInterval,
-    required this.breakInterval,
-    required this.currentSet,
-    required this.totalSets,
-  });
-}
-*/
+import 'package:flutter/services.dart'; // For number input formatting
 
 class CreateTimerScreen extends StatefulWidget {
   final TimerData? existingTimer;
@@ -34,270 +12,175 @@ class CreateTimerScreen extends StatefulWidget {
 
 class _CreateTimerScreenState extends State<CreateTimerScreen> {
   final _nameController = TextEditingController();
-  // REMOVED: No longer need a controller for total time.
-  // final _totalTimeController = TextEditingController();
-  final _workIntervalController = TextEditingController();
-  final _breakIntervalController = TextEditingController();
-  final _setsController = TextEditingController();
-  final stt.SpeechToText _speech = stt.SpeechToText();
-  bool _isListening = false;
-  String _lastHeard = "Tap the mic and speak a command...";
+  List<TimerStep> _steps = [];
 
-  // Check if we are in "edit" mode
   bool get _isEditing => widget.existingTimer != null;
 
   @override
   void initState() {
     super.initState();
-    _speech.initialize();
-    // If we are editing, pre-fill the form fields
     if (_isEditing) {
       _nameController.text = widget.existingTimer!.name;
-      _workIntervalController.text = widget.existingTimer!.workInterval.toString();
-      _breakIntervalController.text = widget.existingTimer!.breakInterval.toString();
-      _setsController.text = widget.existingTimer!.totalSets.toString();
+      // Copy the list of steps
+      _steps = List<TimerStep>.from(widget.existingTimer!.steps);
+    } else {
+      // Start with one empty step for convenience
+      _steps = [TimerStep(name: '', durationInMinutes: 0)];
     }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    // REMOVED: Dispose the controller that was removed.
-    // _totalTimeController.dispose();
-    _workIntervalController.dispose();
-    _breakIntervalController.dispose();
-    _setsController.dispose();
     super.dispose();
   }
 
-  void _listen() async {
-    if (!_isListening) {
-      bool available = await _speech.initialize();
-      if (available) {
-        setState(() => _isListening = true);
-        _speech.listen(
-          onResult: (val) => setState(() {
-            _lastHeard = val.recognizedWords;
-            // UPDATED: Process the command only on the final result for efficiency.
-            if (val.finalResult) {
-              _parseVoiceCommand(_lastHeard);
-            }
-          }),
-        );
-      }
-    } else {
-      setState(() => _isListening = false);
-      _speech.stop();
-    }
+  // --- LOGIC FOR MANAGING STEPS ---
+
+  void _addStep() {
+    setState(() {
+      _steps.add(TimerStep(name: '', durationInMinutes: 0));
+    });
   }
 
-  void _parseVoiceCommand(String command) {
-    final commandLower = command.toLowerCase();
-
-    // --- UPDATED: More flexible Regular Expressions ---
-
-    // Captures names like "start a study timer" or "create a workout timer"
-    // The '(\w+)' looks for a single word after 'a' if 'timer' isn't the next word.
-    final nameMatch = RegExp(r'start a (\w+) timer|create a (\w+) timer').firstMatch(commandLower);
-
-    // Captures "25 minute work", "work for 25 mins", "25 min focus", "30 work"
-    final workMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:work|focus|session)|(?:work|focus|session)\s*(\d+)').firstMatch(commandLower);
-
-    // Captures "5 minute break", "rest for 10 mins", "15 min rest", "5 break"
-    final breakMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:break|rest)|(?:break|rest)\s*(\d+)').firstMatch(commandLower);
-
-    // Captures "for 4 sets", "3 rounds", "do 8 sets"
-    final setsMatch = RegExp(r'(\d+)\s*(?:set|sets|round|rounds)').firstMatch(commandLower);
-
-    // --- Logic to populate fields ---
-
-    if (nameMatch != null) {
-      // Check group 1, if null, use group 2. This handles both "start a..." and "create a..."
-      _nameController.text = nameMatch.group(1) ?? nameMatch.group(2) ?? '';
-    }
-
-    if (workMatch != null) {
-      // Check the first capture group, if it's null, use the second one.
-      // This handles cases where the number comes before or after the keyword.
-      _workIntervalController.text = workMatch.group(1) ?? workMatch.group(2) ?? '';
-    }
-
-    if (breakMatch != null) {
-      _breakIntervalController.text = breakMatch.group(1) ?? breakMatch.group(2) ?? '';
-    }
-
-    if (setsMatch != null) {
-      _setsController.text = setsMatch.group(1) ?? '';
-    }
-
-    // --- Auto-start logic ---
-
-    // Checks if the command contains a trigger word and essential fields have been filled.
-    if (commandLower.contains('start') || commandLower.contains('create')) {
-      // A small delay gives the user a moment to see the fields populate before starting.
-      Future.delayed(const Duration(milliseconds: 750), () {
-        if (mounted && _workIntervalController.text.isNotEmpty && _setsController.text.isNotEmpty) {
-          _speech.stop();
-          setState(() => _isListening = false);
-          _startCountdown();
-        }
+  void _removeStep(int index) {
+    if (_steps.length > 1) {
+      setState(() {
+        _steps.removeAt(index);
       });
+    } else {
+      // Show snackbar if user tries to remove the last step
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A timer must have at least one step.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
-  // UPDATED: Core logic for starting the timer is changed here.
-  void _startCountdown() {
-    // 1. Get values and provide defaults for optional fields.
-    final workTime = int.tryParse(_workIntervalController.text);
-    final breakTime = int.tryParse(_breakIntervalController.text) ?? 5; // Default break is 5 mins
-    final totalSets = int.tryParse(_setsController.text);
+  void _updateStepName(int index, String name) {
+    _steps[index] = TimerStep(name: name, durationInMinutes: _steps[index].durationInMinutes);
+  }
 
-    // 2. Validate essential inputs.
-    if (workTime == null || totalSets == null) {
+  void _updateStepDuration(int index, String duration) {
+    final int minutes = int.tryParse(duration) ?? 0;
+    _steps[index] = TimerStep(name: _steps[index].name, durationInMinutes: minutes);
+  }
+
+  void _saveTimer() {
+    // 1. Validate inputs
+    if (_nameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Work interval and number of sets are required.')),
+        const SnackBar(content: Text('Please enter a timer name.')),
       );
       return;
     }
 
-    if (workTime <= 0 || totalSets <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Work time and sets must be greater than zero.')),
-      );
-      return;
+    // Check for any invalid steps
+    for (var step in _steps) {
+      if (step.name.isEmpty || step.durationInMinutes <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('All steps must have a name and a duration greater than 0.')),
+        );
+        return;
+      }
     }
 
-    // 3. Calculate the total time automatically.
-    // Total Time = (Work Time * Number of Sets) + (Break Time * (Number of Sets - 1))
-    // The (sets - 1) ensures no break time is added after the final set.
-    final calculatedTotalTime = (workTime * totalSets) + (breakTime * (totalSets - 1));
-
-    // 4. Create the TimerData object.
+    // 2. Create the new TimerData object
     final timerData = TimerData(
       id: _isEditing ? widget.existingTimer!.id : DateTime.now().toIso8601String(),
-      name: _nameController.text.isNotEmpty ? _nameController.text : 'My Timer',
-      totalTime: calculatedTotalTime, // Use the calculated time
-      workInterval: workTime,
-      breakInterval: breakTime,
-      totalSets: totalSets,
-      currentSet: 1,
+      name: _nameController.text,
+      steps: _steps,
     );
 
-    // 5. Return the saved data to the previous screen (HomeScreen)
+    // 3. Return the saved data to the previous screen (HomeScreen)
     Navigator.of(context).pop(timerData);
-
-    // 5. Navigate to the countdown screen.
-    /*
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CountdownScreen(timerData: timerData),
-      ),
-    );
-     */
   }
 
-  // --- UI BUILDERS ---
+  // --- UI BUILDER ---
   @override
   Widget build(BuildContext context) {
+    const Color primaryBlue = Color(0xFF007BFF);
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Create New Timer', style: TextStyle(color: Colors.black)),
+        title: Text(_isEditing ? 'Edit Timer' : 'Create New Timer', style: const TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: const BackButton(color: Colors.black),
       ),
-      body: _buildFormUI(),
-    );
-  }
-
-  Widget _buildFormUI() {
-    const Color primaryBlue = Color(0xFF007BFF);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Column(
         children: [
-          _buildSectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Timer Details',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                    controller: _nameController,
-                    label: 'Timer Name',
-                    icon: Icons.label_outline,
-                    hint: 'e.g., Morning Workout'),
-                const SizedBox(height: 16),
-                // REMOVED: The text field for Total Time is gone from the UI.
-                _buildTextField(
-                    controller: _workIntervalController,
-                    label: 'Work Interval (minutes)',
-                    icon: Icons.fitness_center_outlined,
-                    keyboardType: TextInputType.number),
-                const SizedBox(height: 16),
-                _buildTextField(
-                    controller: _breakIntervalController,
-                    label: 'Break Interval (minutes)',
-                    icon: Icons.pause_circle_outline,
-                    keyboardType: TextInputType.number),
-                const SizedBox(height: 16),
-                _buildTextField(
-                    controller: _setsController,
-                    label: 'Number of Sets',
-                    icon: Icons.repeat,
-                    keyboardType: TextInputType.number),
-              ],
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // --- Timer Name ---
+                  _buildSectionCard(
+                    child: _buildTextField(
+                      controller: _nameController,
+                      label: 'Timer Name',
+                      icon: Icons.label_outline,
+                      hint: 'e.g., Morning Workout',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // --- Steps List ---
+                  const Text(
+                    'Timer Steps',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 12),
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _steps.length,
+                    itemBuilder: (context, index) {
+                      return _buildStepCard(index);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // --- Add Step Button ---
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _addStep,
+                      icon: const Icon(Icons.add_circle_outline, color: primaryBlue),
+                      label: const Text('Add Step', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 20),
-          _buildSectionCard(
-            // ... (The voice command card remains the same)
-            child: Column(
-              children: [
-                const Text(
-                  'Or Use a Voice Command',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+
+          // --- Save Button ---
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -2))],
+            ),
+            child: SafeArea(
+              child: ElevatedButton.icon(
+                onPressed: _saveTimer,
+                icon: const Icon(Icons.save_outlined, size: 22),
+                label: Text(
+                  _isEditing ? 'Save Changes' : 'Save Timer',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  '"Start a study timer for 4 sets with 25 minute work and 5 minute break."',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic),
-                ),
-                const SizedBox(height: 16),
-                FloatingActionButton(
-                  onPressed: _listen,
+                style: ElevatedButton.styleFrom(
                   backgroundColor: primaryBlue,
-                  child: Icon(_isListening ? Icons.mic : Icons.mic_off,
-                      color: Colors.white),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                const SizedBox(height: 8),
-                Text(_isListening ? "Listening..." : _lastHeard,
-                    style: TextStyle(color: Colors.grey[700])),
-              ],
-            ),
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton.icon(
-            onPressed: _startCountdown,
-            icon: const Icon(Icons.timer_outlined, size: 22),
-            label: const Text(
-              'Save and Start Timer',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryBlue,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
               ),
             ),
           ),
@@ -307,7 +190,57 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
   }
 
   // --- HELPER WIDGETS ---
-  // The helper widgets _buildSectionCard and _buildTextField remain unchanged.
+
+  Widget _buildStepCard(int index) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      color: const Color(0xFFF9FAFB),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            // Step Number
+            CircleAvatar(
+              backgroundColor: const Color(0xFF007BFF),
+              child: Text('${index + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 12),
+            // Text Fields
+            Expanded(
+              child: Column(
+                children: [
+                  TextFormField(
+                    initialValue: _steps[index].name,
+                    decoration: const InputDecoration(labelText: 'Step Name', isDense: true),
+                    onChanged: (name) => _updateStepName(index, name),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    initialValue: _steps[index].durationInMinutes == 0 ? '' : _steps[index].durationInMinutes.toString(),
+                    decoration: const InputDecoration(labelText: 'Duration (minutes)', isDense: true),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (duration) => _updateStepDuration(index, duration),
+                  ),
+                ],
+              ),
+            ),
+            // Remove Button
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+              onPressed: () => _removeStep(index),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSectionCard({required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -325,31 +258,19 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     required String label,
     required IconData icon,
     String? hint,
-    TextInputType keyboardType = TextInputType.text,
   }) {
-    const Color primaryBlue = Color(0xFF007BFF);
-
     return TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.grey[600]),
-          labelText: label,
-          hintText: hint,
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12.0),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12.0),
-            borderSide: BorderSide(color: Colors.grey.shade300),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12.0),
-            borderSide: const BorderSide(color: primaryBlue, width: 2.0),
-          ),
-        ));
+      controller: controller,
+      decoration: InputDecoration(
+        prefixIcon: Icon(icon, color: Colors.grey[600]),
+        labelText: label,
+        hintText: hint,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.0), borderSide: BorderSide(color: Colors.grey.shade300)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.0), borderSide: BorderSide(color: Colors.grey.shade300)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.0), borderSide: const BorderSide(color: Color(0xFF007BFF), width: 2.0)),
+      ),
+    );
   }
 }
