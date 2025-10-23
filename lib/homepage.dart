@@ -8,8 +8,13 @@ import 'stopwatch_normal_mode.dart';
 import 'create_timer_screen.dart';
 import 'timer_model.dart';
 import 'countdown_screen.dart';
+import 'countdown_screenV.dart';
 import 'stopwatchmodeselecter.dart';
 import 'voice_controller.dart';
+import 'routine_timer_model.dart';
+
+import 'routines.dart'; // <-- Imports NEW routines
+import 'routines_page.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +26,7 @@ class HomeScreen extends StatefulWidget {
 class HomeScreenState extends State<HomeScreen> {
   final FlutterTts _tts = FlutterTts();
   final VoiceController _voiceController = VoiceController();
+  late PredefinedRoutines _routines;
 
   bool _isListening = false;
   List<TimerData> _timers = [];
@@ -30,6 +36,30 @@ class HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _initPage();
+    _routines = PredefinedRoutines(
+      stopListening: _stopListening,
+      speak: _speak,
+      playTimer: _playTimerV,
+    );
+  }
+
+  void _playTimerV(TimerDataV timerToPlay) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CountdownScreenV(timerData: timerToPlay),
+      ),
+    );
+  }
+
+  Future<void> _speak(String text) async {
+    try {
+      await _tts.setLanguage('en-US');
+      await _tts.setSpeechRate(0.9);
+      await _tts.speak(text);
+    } catch (e) {
+      print("TTS error: $e");
+    }
   }
 
   Future<void> _initPage() async {
@@ -315,7 +345,16 @@ class HomeScreenState extends State<HomeScreen> {
               onTap: (index) {
                 if (index == 1) {
                   _openCreateTimerScreen();
-                } else if (index == 4) {
+                }
+                else if(index == 2){
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RoutinesPage(routines: _routines),
+                    ),
+                  );
+                }
+                else if (index == 4) {
                   _openStopwatchSelector();
                 }
               },
