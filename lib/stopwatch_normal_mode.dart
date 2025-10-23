@@ -76,7 +76,7 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
 
   Future<void> _initTts() async {
     await _tts.setLanguage('en-US');
-    await _tts.setSpeechRate(1.2);
+    await _tts.setSpeechRate(0.3);
     await _tts.setPitch(1.0);
   }
 
