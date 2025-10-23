@@ -1,181 +1,83 @@
-// countdown_screen.dart
-import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'timer_model.dart'; // To access the TimerData class
+import 'routine_timer_model.dart'; // To access the NEW TimerData class
 
-class CountdownScreen extends StatefulWidget {
-  final TimerData timerData;
-  final int startingSet = 1;
+class CountdownScreenV extends StatefulWidget {
+  final TimerDataV timerData;
 
-  final bool tutorialMode;
-  final VoidCallback? onTutorialNext;
-
-  const CountdownScreen({
-    super.key,
-    required this.timerData,
-    this.tutorialMode = false,
-    this.onTutorialNext,
-  });
+  const CountdownScreenV({super.key, required this.timerData});
 
   @override
-  State<CountdownScreen> createState() => _CountdownScreenState();
+  State<CountdownScreenV> createState() => _CountdownScreenState();
 }
 
-class _CountdownScreenState extends State<CountdownScreen> {
-  late FlutterTts _tts;
+class _CountdownScreenState extends State<CountdownScreenV> {
   late Timer _timer;
   int _currentSeconds = 0;
   int _elapsedTotalSeconds = 0;
-  String _currentPhase = 'Work';
-  late int _currentSet;
-  bool _isPaused = false;
+  int _currentStepIndex = 0; // <-- REPLACED _currentPhase
 
+  bool _isPaused = false;
   bool _audioFeedbackOn = true;
   bool _hapticFeedbackOn = true;
+
+  // Helper getters for clarity
+  TimerStep get _currentStep => widget.timerData.steps[_currentStepIndex];
+  int get _totalSteps => widget.timerData.steps.length;
+  int get _totalDurationInSeconds => widget.timerData.totalTime * 60;
 
   @override
   void initState() {
     super.initState();
-    _tts = FlutterTts();
-    //_initTts();
-    _currentPhase = 'Work';
-    _currentSet = widget.startingSet;
-    _currentSeconds =
-        min(widget.timerData.workInterval * 60, widget.timerData.totalTime * 60);
-    _initTtsAndStart();
-  }
-
-  Future<void> _initTtsAndStart() async {
-    await _initTts(); // wait for initialization
-    await Future.delayed(const Duration(milliseconds: 700));
-    _startTimer(); // now safe to speak
-  }
-
-  Future<void> _initTts() async {
-    try {
-      await _tts.setLanguage('en-US');
-      await _tts.setPitch(1.0);
-      await _tts.setSpeechRate(0.5);
-      await _tts.awaitSpeakCompletion(true);
-    } catch (_) {
-      print("TTS initialization failed");
-    }
+    _startStep();
   }
 
   @override
   void dispose() {
     _timer.cancel();
-    _tts.stop();
     super.dispose();
   }
 
-  Future<void> _speakTimerDetails() async {
-    if (!_audioFeedbackOn) return; // Only speak if audio feedback is on
-
-    final workMin = widget.timerData.workInterval;
-    final breakMin = widget.timerData.breakInterval;
-    final sets = widget.timerData.totalSets;
-    final name = widget.timerData.name;
-
-    final message = 'Starting timer "$name". '
-        'Work for $workMin minutes, '
-        'then break for $breakMin minutes, '
-        'repeat for $sets sets.';
-
-    try {
-      await _tts.stop(); // Stop any ongoing speech
-      await _tts.speak(message);
-    } catch (e) {
-      print('TTS error: $e');
-    }
+  void _startStep() {
+    // Set the timer for the current step's duration
+    _currentSeconds = _currentStep.durationInMinutes * 60;
+    _startTimer();
   }
-
-  Future<void> _speak(String message) async {
-    if (!_audioFeedbackOn) return; // Respect user toggle
-    try {
-      await _tts.stop();
-      await _tts.speak(message);
-    } catch (e) {
-      // Handle error if needed
-    }
-  }
-
 
   void _startTimer() {
-    // Speak at the start of each phase
-    if (_audioFeedbackOn) {
-      if (_currentPhase == 'Work' && _currentSet == 1) {
-        _speakTimerDetails();
-      }
-      else if (_currentPhase == 'Work' && _currentSet != 1) {
-        _speak("Set $_currentSet: Work for ${widget.timerData.workInterval} minutes.");
-      }
-      else {
-        _speak("Time for a break of ${widget.timerData.breakInterval} minutes.");
-      }
-    }
-
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
 
-      if (_elapsedTotalSeconds >= widget.timerData.totalTime * 60 ||
-          _currentSet > widget.timerData.totalSets) {
-        _timer.cancel();
-        Navigator.of(context).pop();
-        return;
-      }
+      if (_isPaused) return;
 
-      if (!_isPaused) {
-        setState(() {
-          _elapsedTotalSeconds++;
-          if (_currentSeconds > 0) {
-            _currentSeconds--;
-          } else {
-            _timer.cancel();
-            // Speak a short voice note at the end of the phase
-            if (_audioFeedbackOn) {
-              if (_currentPhase == 'Work') {
-                _speak("Work session completed. Take a short break.");
-              } else {
-                _speak("Break over. Starting the next set.");
-              }
-            }
-            _togglePhase();
-            _startTimer();
-          }
-        });
-      }
+      // Timer tick logic
+      setState(() {
+        _elapsedTotalSeconds++;
+
+        if (_currentSeconds > 0) {
+          _currentSeconds--;
+        } else {
+          // Current step finished, move to the next
+          _timer.cancel();
+          _nextStep();
+        }
+      });
     });
   }
 
-
-  void _togglePhase() {
-    //bool finishedSet = false;
-
-    if (_currentPhase == 'Break') {
-      _currentSet++;
-      //finishedSet = true;
-      if (_currentSet > widget.timerData.totalSets) {
-        return;
-      }
+  void _nextStep() {
+    // Check if there are more steps
+    if (_currentStepIndex < _totalSteps - 1) {
+      // Move to the next step
+      setState(() {
+        _currentStepIndex++;
+      });
+      _startStep(); // Start the new step's timer
+    } else {
+      // This was the last step. Timer is finished.
+      Navigator.of(context).pop();
     }
-
-    _currentPhase = (_currentPhase == 'Work') ? 'Break' : 'Work';
-
-    final nextPhaseDuration = (_currentPhase == 'Work'
-        ? widget.timerData.workInterval
-        : widget.timerData.breakInterval) * 60;
-
-    final remainingTotalTime =
-        (widget.timerData.totalTime * 60) - _elapsedTotalSeconds;
-
-    _currentSeconds = min(nextPhaseDuration, remainingTotalTime);
-
-    //if (finishedSet) {
-    //  _speak("Great job! You've completed set ${_currentSet - 1}.");
-    //}
   }
 
   String _formatTime(int totalSeconds) {
@@ -186,17 +88,12 @@ class _CountdownScreenState extends State<CountdownScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // --- COLOR PALETTE FROM HomeScreen ---
+    // --- UI Colors ---
     const Color primaryBlue = Color(0xFF007BFF);
-    const Color breakGreen = Colors.green; // Same as 'Completed' status
     const Color cardBackground = Color(0xFFF9FAFB);
-    const Color cardBorder = Color(0xFFE5E7EB); // Equivalent to grey.shade300
-    const Color inactiveGrey = Colors.grey;
+    const Color cardBorder = Color(0xFFE5E7EB);
     const Color textColor = Colors.black;
     const Color subtextColor = Colors.black54;
-
-    // Determine the active color based on the current phase
-    final Color activeColor = _currentPhase == 'Work' ? primaryBlue : breakGreen;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -206,12 +103,6 @@ class _CountdownScreenState extends State<CountdownScreen> {
         title: const Text('Active Timer', style: TextStyle(color: textColor)),
         centerTitle: true,
         leading: const BackButton(color: textColor),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none_outlined, color: textColor),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -250,7 +141,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
                 child: Column(
                   children: [
                     Text(
-                      'Set $_currentSet of ${widget.timerData.totalSets}',
+                      'Step ${_currentStepIndex + 1} of $_totalSteps: ${_currentStep.name.toUpperCase()}', // <-- UPDATED
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -266,7 +157,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(widget.timerData.totalTime * 60)}',
+                      'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(_totalDurationInSeconds)}',
                       style: TextStyle(
                           fontSize: 16,
                           color: textColor.withOpacity(0.7)),
@@ -312,18 +203,22 @@ class _CountdownScreenState extends State<CountdownScreen> {
 
             const Spacer(),
 
-            // "Tap to Speak" button
+            // Pause/Resume button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.mic, size: 24),
-                label: const Text(
-                  'Tap to Speak',
-                  style: TextStyle(fontSize: 18),
+                onPressed: () {
+                  setState(() {
+                    _isPaused = !_isPaused;
+                  });
+                },
+                icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause, size: 24),
+                label: Text(
+                  _isPaused ? 'Resume Timer' : 'Pause Timer',
+                  style: const TextStyle(fontSize: 18),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: activeColor, // UPDATED: Dynamic color
+                  backgroundColor: _isPaused ? Colors.green : primaryBlue,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -346,7 +241,6 @@ class _CountdownScreenState extends State<CountdownScreen> {
     required bool isOn,
     required ValueChanged<bool> onChanged,
   }) {
-    // UPDATED: Using the color palette from HomeScreen
     const Color primaryBlue = Color(0xFF007BFF);
     const Color inactiveGrey = Colors.grey;
 
