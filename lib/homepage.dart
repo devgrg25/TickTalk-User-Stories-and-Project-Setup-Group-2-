@@ -188,7 +188,7 @@ class HomeScreenState extends State<HomeScreen> {
       // ----------------------- MAIN BODY ------------------------
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.only(bottom: 90),
+          padding: const EdgeInsets.only(bottom: 110), // increased from 90
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
@@ -337,7 +337,8 @@ class HomeScreenState extends State<HomeScreen> {
                     ? Colors.redAccent
                     : const Color(0xFF007BFF),
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                    vertical: 28), // doubled tap area here
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
