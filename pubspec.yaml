@@ -4,31 +4,33 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  # wider 3.x range so everyone on the team can build
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
+  # --- Core packages ---
   shared_preferences: ^2.2.3
-  flutter_tts: ^4.2.3
+  cupertino_icons: ^1.0.8
 
+  # --- Accessibility & voice control ---
+  flutter_tts: ^3.8.5
+  google_speech: ^3.0.0
+  connectivity_plus: ^6.0.3
   speech_to_text:
     git:
       url: https://github.com/csdcorp/speech_to_text.git
-      path: speech_to_text   # <-- important: package is in this subfolder
-      ref: main              # or omit/ref a tag if you prefer
-
-  cupertino_icons: ^1.0.8
+      path: speech_to_text
+      ref: main
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  flutter_lints: ^6.0.0
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
-
-
+  assets:
+    - assets/credentials.json
+    # - assets/test_audio.wav   <-- comment or remove this line
