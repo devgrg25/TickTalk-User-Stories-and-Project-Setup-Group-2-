@@ -49,6 +49,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
 
   Future<void> _initTtsAndStart() async {
     await _initTts(); // wait for initialization
+    await Future.delayed(const Duration(milliseconds: 700));
     _startTimer(); // now safe to speak
   }
 
