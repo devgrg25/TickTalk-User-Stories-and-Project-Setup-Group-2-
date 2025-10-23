@@ -120,8 +120,9 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
   void _parseVoiceCommand(String command) {
     final commandLower = command.toLowerCase();
 
-    final simpleTimerMatch = RegExp(r'start a timer for (\d+)\s*(?:minute|min|mins)?')
-        .firstMatch(commandLower);
+    final simpleTimerMatch = RegExp(
+        r'(?:start|create)(?: a)?(?: timer)?(?: for)? (\d+)\s*(?:minute|min|mins)?'
+    ).firstMatch(commandLower);
 
     // --- UPDATED: More flexible Regular Expressions ---
 
