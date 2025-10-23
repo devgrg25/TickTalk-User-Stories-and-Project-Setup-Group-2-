@@ -1,5 +1,5 @@
 // countdown_screen.dart
-
+import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -24,6 +24,7 @@ class CountdownScreen extends StatefulWidget {
 }
 
 class _CountdownScreenState extends State<CountdownScreen> {
+  late FlutterTts _tts;
   late Timer _timer;
   int _currentSeconds = 0;
   int _elapsedTotalSeconds = 0;
@@ -37,20 +38,84 @@ class _CountdownScreenState extends State<CountdownScreen> {
   @override
   void initState() {
     super.initState();
+    _tts = FlutterTts();
+    //_initTts();
     _currentPhase = 'Work';
     _currentSet = widget.startingSet;
     _currentSeconds =
         min(widget.timerData.workInterval * 60, widget.timerData.totalTime * 60);
-    _startTimer();
+    _initTtsAndStart();
+  }
+
+  Future<void> _initTtsAndStart() async {
+    await _initTts(); // wait for initialization
+    _startTimer(); // now safe to speak
+  }
+
+  Future<void> _initTts() async {
+    try {
+      await _tts.setLanguage('en-US');
+      await _tts.setPitch(1.0);
+      await _tts.setSpeechRate(0.5);
+      await _tts.awaitSpeakCompletion(true);
+    } catch (_) {
+      print("TTS initialization failed");
+    }
   }
 
   @override
   void dispose() {
     _timer.cancel();
+    _tts.stop();
     super.dispose();
   }
 
+  Future<void> _speakTimerDetails() async {
+    if (!_audioFeedbackOn) return; // Only speak if audio feedback is on
+
+    final workMin = widget.timerData.workInterval;
+    final breakMin = widget.timerData.breakInterval;
+    final sets = widget.timerData.totalSets;
+    final name = widget.timerData.name;
+
+    final message = 'Starting timer "$name". '
+        'Work for $workMin minutes, '
+        'then break for $breakMin minutes, '
+        'repeat for $sets sets.';
+
+    try {
+      await _tts.stop(); // Stop any ongoing speech
+      await _tts.speak(message);
+    } catch (e) {
+      print('TTS error: $e');
+    }
+  }
+
+  Future<void> _speak(String message) async {
+    if (!_audioFeedbackOn) return; // Respect user toggle
+    try {
+      await _tts.stop();
+      await _tts.speak(message);
+    } catch (e) {
+      // Handle error if needed
+    }
+  }
+
+
   void _startTimer() {
+    // Speak at the start of each phase
+    if (_audioFeedbackOn) {
+      if (_currentPhase == 'Work' && _currentSet == 1) {
+        _speakTimerDetails();
+      }
+      else if (_currentPhase == 'Work' && _currentSet != 1) {
+        _speak("Set $_currentSet: Work for ${widget.timerData.workInterval} minutes.");
+      }
+      else {
+        _speak("Time for a break of ${widget.timerData.breakInterval} minutes.");
+      }
+    }
+
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
 
@@ -68,6 +133,14 @@ class _CountdownScreenState extends State<CountdownScreen> {
             _currentSeconds--;
           } else {
             _timer.cancel();
+            // Speak a short voice note at the end of the phase
+            if (_audioFeedbackOn) {
+              if (_currentPhase == 'Work') {
+                _speak("Work session completed. Take a short break.");
+              } else {
+                _speak("Break over. Starting the next set.");
+              }
+            }
             _togglePhase();
             _startTimer();
           }
@@ -76,9 +149,13 @@ class _CountdownScreenState extends State<CountdownScreen> {
     });
   }
 
+
   void _togglePhase() {
+    //bool finishedSet = false;
+
     if (_currentPhase == 'Break') {
       _currentSet++;
+      //finishedSet = true;
       if (_currentSet > widget.timerData.totalSets) {
         return;
       }
@@ -94,6 +171,10 @@ class _CountdownScreenState extends State<CountdownScreen> {
         (widget.timerData.totalTime * 60) - _elapsedTotalSeconds;
 
     _currentSeconds = min(nextPhaseDuration, remainingTotalTime);
+
+    //if (finishedSet) {
+    //  _speak("Great job! You've completed set ${_currentSet - 1}.");
+    //}
   }
 
   String _formatTime(int totalSeconds) {
