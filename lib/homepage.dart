@@ -205,6 +205,7 @@ class HomeScreenState extends State<HomeScreen> {
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF007BFF),
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -280,6 +281,7 @@ class HomeScreenState extends State<HomeScreen> {
                 )
                     : ListView.builder(
                   shrinkWrap: true,
+                  padding: const EdgeInsets.only(bottom: 40),
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _timers.length,
                   itemBuilder: (context, index) {
@@ -343,7 +345,7 @@ class HomeScreenState extends State<HomeScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      _isListening ? Icons.mic : Icons.mic_none,
+                      _isListening ? Icons.mic : Icons.mic_off,
                       color: Colors.white,
                     ),
                     const SizedBox(width: 8),
@@ -353,8 +355,8 @@ class HomeScreenState extends State<HomeScreen> {
                           : "Tap to Speak",
                       style: const TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
