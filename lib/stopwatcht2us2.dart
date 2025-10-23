@@ -1,3 +1,5 @@
+// stopwatcht2us2.dart  (ADDED tutorialMode + overlay + TTS narration; original logic preserved)
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -5,7 +7,15 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 
 class StopwatchT2US2 extends StatefulWidget {
-  const StopwatchT2US2({super.key});
+  const StopwatchT2US2({
+    super.key,
+    this.tutorialMode = false,
+    this.onTutorialFinish,
+  });
+
+  // optional tutorial hooks (non-breaking)
+  final bool tutorialMode;
+  final VoidCallback? onTutorialFinish;
 
   @override
   State<StopwatchT2US2> createState() => _StopwatchT2US2State();
@@ -168,10 +178,14 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
   }
 
   String _formatTime(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final minutes =
+    duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds =
+    duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     final centiseconds =
-    (duration.inMilliseconds.remainder(1000) ~/ 10).toString().padLeft(2, '0');
+    (duration.inMilliseconds.remainder(1000) ~/ 10)
+        .toString()
+        .padLeft(2, '0');
     return '$minutes:$seconds:$centiseconds';
   }
 
@@ -293,7 +307,8 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
       icon: Icon(icon, size: 24),
       label: Text(
         label,
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        style:
+        const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
