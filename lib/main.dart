@@ -207,8 +207,10 @@
 // }
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'welcome_page.dart';
+
 import 'homepage.dart';
+import 'welcome_page.dart';
+import 'widgets/global_scaffold.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

@@ -26,12 +26,8 @@ class VoiceController {
 
       // Initialize Speech Recognition
       await _speech.initialize(
-        onStatus: (status) {
-          debugPrint('🎙 Speech status: $status');
-        },
-        onError: (error) {
-          debugPrint('⚠️ Speech error: $error');
-        },
+        onStatus: (status) => debugPrint('🎙 Speech status: $status'),
+        onError: (error) => debugPrint('⚠️ Speech error: $error'),
       );
 
       _isInitialized = true;
@@ -65,8 +61,12 @@ class VoiceController {
     }
   }
 
-  /// Start listening for speech and run optional callback when complete
-  Future<void> listenAndRecognize({VoidCallback? onComplete}) async {
+  /// Start listening for speech and run optional callbacks
+  /// [onCommandRecognized] - passes recognized command text to caller
+  Future<void> listenAndRecognize({
+    Function(String recognizedText)? onCommandRecognized,
+    VoidCallback? onComplete,
+  }) async {
     try {
       if (_isListening) return;
       _isListening = true;
@@ -78,13 +78,18 @@ class VoiceController {
         localeId: 'en_US',
         onResult: (result) async {
           if (result.recognizedWords.isEmpty) return;
+
           final recognized = result.recognizedWords.toLowerCase().trim();
           debugPrint('🗣 Recognized: $recognized');
 
-          // Handle commands here if needed
-          await _handleCommand(recognized);
+          // Return recognized text to caller
+          if (onCommandRecognized != null) {
+            onCommandRecognized(recognized);
+          }
 
-          // When final result is received, stop listening
+          // Built-in responses for some default phrases
+          await _handleInternalCommand(recognized);
+
           if (result.finalResult) {
             await stopListening();
             onComplete?.call();
@@ -120,8 +125,9 @@ class VoiceController {
     }
   }
 
-  /// Handle simple recognized commands
-  Future<void> _handleCommand(String recognized) async {
+  /// Handles simple voice feedback for recognized commands
+  /// (Navigation is handled externally by the UI)
+  Future<void> _handleInternalCommand(String recognized) async {
     if (recognized.contains("repeat")) {
       await speak("Repeating that again.");
     } else if (recognized.contains("start stopwatch")) {
@@ -130,6 +136,11 @@ class VoiceController {
       await speak("Opening settings.");
     } else if (recognized.contains("stop")) {
       await speak("Okay, stopping now.");
+    } else if (recognized.contains("create timer") ||
+        recognized == "timer" ||
+        recognized.contains("new timer")) {
+      // Speak confirmation only — navigation handled by parent
+      await speak("Creating a new timer.");
     } else {
       debugPrint("No predefined command matched.");
     }
