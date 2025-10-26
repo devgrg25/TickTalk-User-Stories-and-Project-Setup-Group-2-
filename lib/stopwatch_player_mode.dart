@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'widgets/global_scaffold.dart'; // ✅ Global mic wrapper
 
 enum SortFilter {
   lowToHigh,
@@ -29,6 +30,7 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
   void initState() {
     super.initState();
     _initTts();
+
     _players = List.generate(
       widget.playerCount,
           (index) => PlayerStopwatch(
@@ -36,6 +38,7 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
         vsync: this,
       ),
     );
+
     // Start all timers automatically
     for (var player in _players) {
       player.start();
@@ -89,12 +92,9 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
 
   @override
   Widget build(BuildContext context) {
-    if (_showSummary) {
-      return _buildSummaryScreen();
-    }
+    if (_showSummary) return _buildSummaryScreen();
 
-    return Scaffold(
-      backgroundColor: Colors.white,
+    return GlobalScaffold( // ✅ Global mic active
       appBar: AppBar(
         title: Text(
           'Player Mode (${widget.playerCount} Players)',
@@ -104,7 +104,7 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
         elevation: 0,
         leading: const BackButton(color: Colors.black),
       ),
-      body: Column(
+      child: Column(
         children: [
           Expanded(
             child: ListView.builder(
@@ -170,7 +170,7 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Player Header with Lap Count
+            // Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -184,7 +184,8 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
                 ),
                 if (player.laps.isNotEmpty)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: const Color(0xFF007BFF).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -202,10 +203,9 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
             ),
             const SizedBox(height: 12),
 
-            // Horizontal Layout: Timer + Buttons
+            // Timer + Buttons
             Row(
               children: [
-                // Timer Display
                 Expanded(
                   flex: 2,
                   child: StreamBuilder<Duration>(
@@ -214,7 +214,8 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
                     builder: (context, snapshot) {
                       final elapsed = snapshot.data ?? Duration.zero;
                       return Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 12, horizontal: 8),
                         decoration: BoxDecoration(
                           color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(12),
@@ -236,16 +237,17 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
                 ),
                 const SizedBox(width: 12),
 
-                // Buttons Column
                 Expanded(
                   flex: 1,
                   child: Column(
                     children: [
                       _buildCompactButton(
-                        icon: player.isRunning ? Icons.pause : Icons.play_arrow,
+                        icon:
+                        player.isRunning ? Icons.pause : Icons.play_arrow,
                         label: player.isRunning ? 'Stop' : 'Start',
                         onPressed: () => _togglePlayer(player),
-                        color: player.isRunning ? Colors.orange : Colors.green,
+                        color:
+                        player.isRunning ? Colors.orange : Colors.green,
                       ),
                       const SizedBox(height: 6),
                       _buildCompactButton(
@@ -258,7 +260,8 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
                       _buildCompactButton(
                         icon: Icons.flag,
                         label: 'Lap',
-                        onPressed: player.isRunning ? () => _lap(player) : null,
+                        onPressed:
+                        player.isRunning ? () => _lap(player) : null,
                         color: const Color(0xFF007BFF),
                       ),
                     ],
@@ -299,7 +302,8 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
             const SizedBox(width: 4),
             Text(
               label,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              style:
+              const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -336,10 +340,10 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
   Widget _buildSummaryScreen() {
     final sortedPlayers = _getSortedPlayers();
 
-    return Scaffold(
-      backgroundColor: Colors.white,
+    return GlobalScaffold( // ✅ Global mic on summary too
       appBar: AppBar(
-        title: const Text('Final Results', style: TextStyle(color: Colors.black)),
+        title: const Text('Final Results',
+            style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
@@ -350,101 +354,40 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
               setState(() => _currentFilter = filter);
             },
             itemBuilder: (context) => [
-              PopupMenuItem(
-                value: SortFilter.lowToHigh,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.arrow_upward,
-                      color: _currentFilter == SortFilter.lowToHigh
-                          ? const Color(0xFF007BFF)
-                          : Colors.grey,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Player # Low to High'),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: SortFilter.highToLow,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.arrow_downward,
-                      color: _currentFilter == SortFilter.highToLow
-                          ? const Color(0xFF007BFF)
-                          : Colors.grey,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Player # High to Low'),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: SortFilter.fastestTime,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.speed,
-                      color: _currentFilter == SortFilter.fastestTime
-                          ? const Color(0xFF007BFF)
-                          : Colors.grey,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Fastest Time'),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: SortFilter.mostLaps,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.flag,
-                      color: _currentFilter == SortFilter.mostLaps
-                          ? const Color(0xFF007BFF)
-                          : Colors.grey,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Most Laps'),
-                  ],
-                ),
-              ),
+              _filterItem(SortFilter.lowToHigh, 'Player # Low to High',
+                  Icons.arrow_upward),
+              _filterItem(SortFilter.highToLow, 'Player # High to Low',
+                  Icons.arrow_downward),
+              _filterItem(
+                  SortFilter.fastestTime, 'Fastest Time', Icons.speed),
+              _filterItem(SortFilter.mostLaps, 'Most Laps', Icons.flag),
             ],
           ),
         ],
       ),
-      body: Column(
+      child: Column(
         children: [
-          // Header
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Column(
               children: [
-                const Icon(
-                  Icons.emoji_events,
-                  size: 64,
-                  color: Colors.amber,
-                ),
+                const Icon(Icons.emoji_events,
+                    size: 64, color: Colors.amber),
                 const SizedBox(height: 12),
                 const Text(
                   '🏆 Leaderboard 🏆',
                   style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
+                      fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '${widget.playerCount} Players • ${_getFilterLabel()}',
-                  style: const TextStyle(fontSize: 13, color: Colors.black54),
+                  style: const TextStyle(
+                      fontSize: 13, color: Colors.black54),
                 ),
               ],
             ),
           ),
-
-          // Results List
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -453,7 +396,6 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
                 final player = sortedPlayers[index];
                 final position = index + 1;
 
-                // Show medals and colors for top 3 positions in ALL filters
                 Color positionColor;
                 String medal;
 
@@ -480,42 +422,45 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
               },
             ),
           ),
-
-          // Close Button
           Container(
             padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -2),
-                ),
-              ],
-            ),
             child: SafeArea(
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close, size: 24),
-                  label: const Text(
-                    'Close',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF007BFF),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close, size: 24),
+                label: const Text(
+                  'Close',
+                  style:
+                  TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF007BFF),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  PopupMenuItem<SortFilter> _filterItem(
+      SortFilter value, String text, IconData icon) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon,
+              color: _currentFilter == value
+                  ? const Color(0xFF007BFF)
+                  : Colors.grey),
+          const SizedBox(width: 8),
+          Text(text),
         ],
       ),
     );
@@ -543,11 +488,11 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape:
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        tilePadding:
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: Stack(
           alignment: Alignment.center,
           children: [
@@ -567,130 +512,104 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
               Positioned(
                 top: -4,
                 right: -4,
-                child: Text(medal, style: const TextStyle(fontSize: 18)),
+                child:
+                Text(medal, style: const TextStyle(fontSize: 18)),
               ),
           ],
         ),
         title: Text(
           'Player ${player.playerNumber}',
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 4),
-            Text(
-              'Time: ${_formatTime(player.finalTime)}',
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            Text(
-              'Laps: ${player.laps.length}',
-              style: const TextStyle(fontSize: 13, color: Colors.black54),
-            ),
+            Text('Time: ${_formatTime(player.finalTime)}',
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w600)),
+            Text('Laps: ${player.laps.length}',
+                style:
+                const TextStyle(fontSize: 13, color: Colors.black54)),
           ],
         ),
         children: player.laps.isEmpty
             ? [
           const Padding(
             padding: EdgeInsets.all(16.0),
-            child: Text(
-              'No laps recorded',
-              style: TextStyle(color: Colors.black54, fontStyle: FontStyle.italic),
-            ),
+            child: Text('No laps recorded',
+                style: TextStyle(
+                    color: Colors.black54,
+                    fontStyle: FontStyle.italic)),
           ),
         ]
             : [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16.0, vertical: 8.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Divider(),
-                const Text(
-                  'Lap Times:',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF007BFF),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ...List.generate(player.laps.length, (index) {
-                  final lapNumber = index + 1;
-                  final lapTime = player.laps[index];
-                  final lapDuration = index == 0
-                      ? lapTime
-                      : Duration(
-                      milliseconds: lapTime.inMilliseconds -
-                          player.laps[index - 1].inMilliseconds);
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
+              children: List.generate(player.laps.length, (index) {
+                final lapNumber = index + 1;
+                final lapTime = player.laps[index];
+                final lapDuration = index == 0
+                    ? lapTime
+                    : Duration(
+                    milliseconds:
+                    lapTime.inMilliseconds -
+                        player
+                            .laps[index - 1]
+                            .inMilliseconds);
+                return Padding(
+                  padding:
+                  const EdgeInsets.symmetric(vertical: 4.0),
+                  child: Row(
+                    mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF007BFF)
+                                .withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '$lapNumber',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF007BFF),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment:
+                          CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF007BFF).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '$lapNumber',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF007BFF),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Total: ${_formatTime(lapTime)}',
-                                  style: const TextStyle(
+                            Text(
+                                'Total: ${_formatTime(lapTime)}',
+                                style: const TextStyle(
                                     fontSize: 13,
-                                    fontFamily: 'monospace',
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  'Split: ${_formatTime(lapDuration)}',
-                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600)),
+                            Text(
+                                'Split: ${_formatTime(lapDuration)}',
+                                style: const TextStyle(
                                     fontSize: 11,
-                                    color: Colors.black54,
-                                    fontFamily: 'monospace',
-                                  ),
-                                ),
-                              ],
-                            ),
+                                    color: Colors.black54)),
                           ],
                         ),
-                        Icon(
-                          Icons.flag,
-                          color: Colors.grey.shade400,
-                          size: 18,
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-                const SizedBox(height: 8),
-              ],
+                      ]),
+                      const Icon(Icons.flag,
+                          size: 18, color: Colors.grey),
+                    ],
+                  ),
+                );
+              }),
             ),
           ),
         ],
@@ -699,15 +618,18 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
   }
 
   String _formatTime(Duration duration) {
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    final centiseconds =
-    (duration.inMilliseconds.remainder(1000) ~/ 10).toString().padLeft(2, '0');
+    final minutes =
+    duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds =
+    duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final centiseconds = (duration.inMilliseconds.remainder(1000) ~/ 10)
+        .toString()
+        .padLeft(2, '0');
     return '$minutes:$seconds:$centiseconds';
   }
 }
 
-// Player Stopwatch Class
+// Player Stopwatch Model
 class PlayerStopwatch {
   final int playerNumber;
   late Ticker _ticker;
@@ -760,9 +682,11 @@ class PlayerStopwatch {
 
     String announcement = "Player $playerNumber: ";
     if (minutes > 0) {
-      announcement += "$minutes minute${minutes != 1 ? 's' : ''} and $seconds second${seconds != 1 ? 's' : ''}";
+      announcement +=
+      "$minutes minute${minutes != 1 ? 's' : ''} and $seconds second${seconds != 1 ? 's' : ''}";
     } else {
-      announcement += "$seconds second${seconds != 1 ? 's' : ''}";
+      announcement +=
+      "$seconds second${seconds != 1 ? 's' : ''}";
     }
 
     await _tts.speak(announcement);

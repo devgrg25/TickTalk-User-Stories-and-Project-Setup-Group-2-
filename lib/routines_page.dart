@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'routines.dart'; // Imports the logic class
-import 'timer_model.dart'; // We also need this for the typedefs in routines.dart
+import 'timer_model.dart'; // For typedefs
+import 'widgets/global_scaffold.dart'; // ✅ Add this import for mic
 
 class RoutinesPage extends StatelessWidget {
   final PredefinedRoutines routines;
@@ -16,15 +17,14 @@ class RoutinesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
+    return GlobalScaffold( // ✅ Replaced Scaffold with GlobalScaffold
       appBar: AppBar(
         title: const Text('Routines', style: TextStyle(color: textColor)),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: const BackButton(color: textColor),
       ),
-      body: ListView(
+      child: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           // --- Interval Timers Section ---
@@ -83,9 +83,9 @@ class RoutinesPage extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // --- Sequential Timers (Now Enabled) ---
+          // --- Sequential Timers ---
           const Text(
-            'Sequential Routines', // <-- REMOVED "(Coming Soon)"
+            'Sequential Routines',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -97,21 +97,22 @@ class RoutinesPage extends StatelessWidget {
             title: 'Morning Independence',
             description: '3 min wash, 2 min dress, 5 min eat cycle.',
             icon: Icons.wb_sunny_outlined,
-            onPressed: routines.startMorningIndependence, // <-- ENABLED
+            onPressed: routines.startMorningIndependence,
           ),
           _buildRoutineListItem(
             title: 'Recipe Prep Guide',
             description: 'Sequential timers for cooking steps.',
             icon: Icons.restaurant_menu,
-            onPressed: routines.startRecipePrep, // <-- ENABLED
+            onPressed: routines.startRecipePrep,
           ),
+
+          const SizedBox(height: 100), // extra space above mic bar
         ],
       ),
     );
   }
 
   /// A helper widget to create a consistent list item for each routine.
-  /// This is styled to match the TimerCard from homepage.dart.
   Widget _buildRoutineListItem({
     required String title,
     required String description,
@@ -139,14 +140,13 @@ class RoutinesPage extends StatelessWidget {
             style: const TextStyle(fontSize: 13, color: subtextColor),
           ),
           trailing: ElevatedButton(
-            onPressed: onPressed, // Button is enabled/disabled based on this
+            onPressed: onPressed,
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryBlue,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
-              // Make the button look disabled if onPressed is null
               disabledBackgroundColor: Colors.grey.shade300,
             ),
             child: const Text('Start'),

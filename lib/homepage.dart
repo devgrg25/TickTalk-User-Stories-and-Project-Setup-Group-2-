@@ -148,15 +148,50 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // -----------------------------------------------------------------
+  // VOICE LISTENING + COMMAND HANDLING
+  // -----------------------------------------------------------------
   Future<void> _startListening() async {
     if (_isListening) return;
     setState(() => _isListening = true);
 
-    await _voiceController.listenAndRecognize(onComplete: () {
-      if (mounted) {
-        setState(() => _isListening = false);
-      }
-    });
+    await _voiceController.listenAndRecognize(
+      onCommandRecognized: (String command) async {
+        final normalized = command.toLowerCase().trim();
+        debugPrint("Recognized voice command: $normalized");
+
+        if (normalized.contains('create timer') ||
+            normalized.contains('new timer') ||
+            normalized.contains('start timer') ||
+            normalized.contains('open timer') ||
+            normalized == 'timer') {
+          await _tts.speak("Opening timer creation screen.");
+          _openCreateTimerScreen();
+
+        } else if (normalized.contains('start stopwatch') ||
+            normalized.contains('open stopwatch') ||
+            normalized == 'stopwatch') {
+          await _tts.speak("Opening stopwatch.");
+          _openStopwatchSelector();
+
+        } else if (normalized.contains('open settings') ||
+            normalized == 'settings') {
+          await _tts.speak("Opening settings.");
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SettingsPage()),
+          );
+
+        } else {
+          await _tts.speak("Sorry, I didn't understand that command.");
+        }
+      },
+      onComplete: () {
+        if (mounted) {
+          setState(() => _isListening = false);
+        }
+      },
+    );
   }
 
   Future<void> _stopListening() async {
@@ -171,6 +206,9 @@ class HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  // -----------------------------------------------------------------
+  // UI SECTION
+  // -----------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -218,7 +256,7 @@ class HomeScreenState extends State<HomeScreen> {
       // ----------------------- MAIN BODY ------------------------
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.only(bottom: 110), // increased from 90
+          padding: const EdgeInsets.only(bottom: 110),
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
@@ -374,12 +412,10 @@ class HomeScreenState extends State<HomeScreen> {
               onTap: _isListening ? _stopListening : _startListening,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
-                color: _isListening
-                    ? Colors.redAccent
-                    : const Color(0xFF007BFF),
+                color:
+                _isListening ? Colors.redAccent : const Color(0xFF007BFF),
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    vertical: 28), // doubled tap area here
+                padding: const EdgeInsets.symmetric(vertical: 28),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -445,7 +481,9 @@ class RoutineCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(title,
               style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black)),
           const SizedBox(height: 6),
           Expanded(
             child: Text(description,
