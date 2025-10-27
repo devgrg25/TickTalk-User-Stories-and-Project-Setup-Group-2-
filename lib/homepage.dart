@@ -334,7 +334,7 @@ class HomeScreenState extends State<HomeScreen> {
       ),
 
       // ----------------------- BOTTOM MIC BAR ------------------------
-      bottomSheet: SafeArea(
+      /*bottomSheet: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -404,7 +404,7 @@ class HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-      ),
+      ),*/
     );
   }
 }

@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'homepage.dart';
 import 'create_timer_screen.dart';
 import 'stopwatchmodeselecter.dart';
 import 'stopwatch_normal_mode.dart';
+import 'MainPage.dart';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
@@ -114,8 +115,10 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
     } catch (_) {}
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(builder: (_) => const MainPage()),
     );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasSeenWelcome', true);
   }
 
   Future<void> _handle(String words) async {
