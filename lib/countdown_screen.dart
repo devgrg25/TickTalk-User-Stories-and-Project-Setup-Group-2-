@@ -213,132 +213,135 @@ class _CountdownScreenState extends State<CountdownScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // "Current Timer" card
-            Card(
-              elevation: 0,
-              color: cardBackground,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: cardBorder)),
-              child: ListTile(
-                title: const Text('Current Timer', style: TextStyle(fontSize: 12, color: subtextColor)),
-                subtitle: Text(
-                  widget.timerData.name,
-                  style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: textColor),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Main timer display card
-            Card(
-              elevation: 0,
-              color: cardBackground,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: cardBorder)),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 32.0),
-                child: Column(
-                  children: [
-                    Text(
-                      'Set $_currentSet of ${widget.timerData.totalSets}',
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: textColor.withOpacity(0.7)),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _formatTime(_currentSeconds),
-                      style: const TextStyle(
-                          fontSize: 80,
-                          fontWeight: FontWeight.bold,
-                          color: textColor),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(widget.timerData.totalTime * 60)}',
-                      style: TextStyle(
-                          fontSize: 16,
-                          color: textColor.withOpacity(0.7)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Feedback controls card
-            Card(
-              elevation: 0,
-              color: cardBackground,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: cardBorder)),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildFeedbackToggle(
-                      icon: Icons.volume_up_outlined,
-                      label: 'Audio Feedback',
-                      isOn: _audioFeedbackOn,
-                      onChanged: (value) {
-                        setState(() => _audioFeedbackOn = value);
-                      },
-                    ),
-                    _buildFeedbackToggle(
-                      icon: Icons.vibration_outlined,
-                      label: 'Haptic Feedback',
-                      isOn: _hapticFeedbackOn,
-                      onChanged: (value) {
-                        setState(() => _hapticFeedbackOn = value);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const Spacer(),
-
-            // "Tap to Speak" button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.mic, size: 24),
-                label: const Text(
-                  'Tap to Speak',
-                  style: TextStyle(fontSize: 18),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: activeColor, // UPDATED: Dynamic color
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+      // MODIFICATION 1: Wrap the body's content in a SingleChildScrollView
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              // "Current Timer" card
+              Card(
+                elevation: 0,
+                color: cardBackground,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: cardBorder)),
+                child: ListTile(
+                  title: const Text('Current Timer', style: TextStyle(fontSize: 12, color: subtextColor)),
+                  subtitle: Text(
+                    widget.timerData.name,
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: textColor),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-          ],
+              const SizedBox(height: 24),
+
+              // Main timer display card
+              Card(
+                elevation: 0,
+                color: cardBackground,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: cardBorder)),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 32.0),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Set $_currentSet of ${widget.timerData.totalSets}',
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: textColor.withOpacity(0.7)),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _formatTime(_currentSeconds),
+                        style: const TextStyle(
+                            fontSize: 80,
+                            fontWeight: FontWeight.bold,
+                            color: textColor),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(widget.timerData.totalTime * 60)}',
+                        style: TextStyle(
+                            fontSize: 16,
+                            color: textColor.withOpacity(0.7)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Feedback controls card
+              Card(
+                elevation: 0,
+                color: cardBackground,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: cardBorder)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildFeedbackToggle(
+                        icon: Icons.volume_up_outlined,
+                        label: 'Audio Feedback',
+                        isOn: _audioFeedbackOn,
+                        onChanged: (value) {
+                          setState(() => _audioFeedbackOn = value);
+                        },
+                      ),
+                      _buildFeedbackToggle(
+                        icon: Icons.vibration_outlined,
+                        label: 'Haptic Feedback',
+                        isOn: _hapticFeedbackOn,
+                        onChanged: (value) {
+                          setState(() => _hapticFeedbackOn = value);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // MODIFICATION 2: Replace Spacer() with a SizedBox for consistent spacing
+              const SizedBox(height: 32),
+
+              // "Tap to Speak" button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.mic, size: 24),
+                  label: const Text(
+                    'Tap to Speak',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: activeColor, // UPDATED: Dynamic color
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16), // Padding at the very bottom
+            ],
+          ),
         ),
       ),
     );
   }
-
   // Helper widget for the feedback toggles
   Widget _buildFeedbackToggle({
     required IconData icon,

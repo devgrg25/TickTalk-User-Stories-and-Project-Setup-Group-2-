@@ -231,7 +231,7 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     );
 
     // 5. Return the saved data to the previous screen (HomeScreen)
-    Navigator.of(context).pop(timerData);
+    //Navigator.of(context).pop(timerData);
 
     // 5. Navigate to the countdown screen.
 
@@ -241,7 +241,6 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
         builder: (context) => CountdownScreen(timerData: timerData),
       ),
     );
-
   }
 
   // --- UI BUILDERS ---

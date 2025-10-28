@@ -110,7 +110,9 @@ class HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => const CreateTimerScreen()),
     );
-    if (result != null) _addOrUpdateTimer(result);
+    if (result != null){
+      _addOrUpdateTimer(result);
+    }
   }
 
   void _editTimer(TimerData timerToEdit) async {
