@@ -2,9 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
-/// VoiceController manages both speech recognition (STT)
-/// and text-to-speech (TTS) features for TickTalk.
-/// It’s designed to be lightweight and reliable for accessibility.
+class ParsedVoiceCommand {
+  final String? name;
+  final int? workMinutes;
+  final int? breakMinutes;
+  final int? sets;
+  final int? simpleTimerMinutes;
+
+  ParsedVoiceCommand({
+    this.name,
+    this.workMinutes,
+    this.breakMinutes,
+    this.sets,
+    this.simpleTimerMinutes,
+  });
+}
+
 class VoiceController {
   final FlutterTts _tts = FlutterTts();
   final stt.SpeechToText _speech = stt.SpeechToText();
@@ -21,7 +34,7 @@ class VoiceController {
       // Initialize TTS
       await _tts.setLanguage('en-US');
       await _tts.setPitch(1.0);
-      await _tts.setSpeechRate(0.9);
+      await _tts.setSpeechRate(0.5);
       _ttsReady = true;
 
       // Initialize Speech Recognition
@@ -74,23 +87,41 @@ class VoiceController {
       debugPrint('🎤 Listening started...');
 
       await _speech.listen(
-        listenMode: stt.ListenMode.confirmation,
-        localeId: 'en_US',
-        onResult: (result) async {
-          if (result.recognizedWords.isEmpty) return;
-          final recognized = result.recognizedWords.toLowerCase().trim();
-          debugPrint('🗣 Recognized: $recognized');
-
-          // Handle commands here if needed
-          await _handleCommand(recognized);
-
-          // When final result is received, stop listening
+        onResult: (result) {
           if (result.finalResult) {
-            await stopListening();
+            final recognized = result.recognizedWords.toLowerCase();
+            debugPrint("🎙 Recognized: $recognized");
+
+            if (recognized.contains("start")) {
+              speak("Starting timer");
+            } else if (recognized.contains("stop")) {
+              speak("Stopping all timers");
+            } else if (recognized.contains("home")) {
+              speak("Navigating to home");
+            }  else {
+              _handleCommand(recognized);
+            }
+
+            stopListening();
             onComplete?.call();
           }
         },
+        listenOptions: stt.SpeechListenOptions(
+          listenMode: stt.ListenMode.confirmation, // now set here
+          partialResults: true,
+          cancelOnError: true,
+          autoPunctuation: true,
+          enableHapticFeedback: true,
+          // Optional timeouts:
+          // listenFor: const Duration(seconds: 30),
+          // pauseFor: const Duration(seconds: 3),
+          // localeId: 'en_US',
+        ),
+        onSoundLevelChange: (level) {
+          // optional: handle mic level UI
+        },
       );
+
     } catch (e) {
       debugPrint('❌ Listen error: $e');
       _isListening = false;
@@ -140,4 +171,53 @@ class VoiceController {
     _speech.stop();
     _tts.stop();
   }
+  //------------------------------- Create Timer -------------------------------
+
+  Future<ParsedVoiceCommand?> interpretCommand(String command) async {
+    final text = command.toLowerCase();
+
+    final simpleTimerMatch = RegExp(
+        r'(?:start|create)(?: a)?(?: timer)?(?: for)? (\d+)\s*(?:minute|min|mins)?'
+    ).firstMatch(text);
+
+    final nameMatch = RegExp(r'start a (\w+) timer|create a (\w+) timer').firstMatch(text);
+    final workMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:work|focus|session)|(?:work|focus|session)\s*(\d+)').firstMatch(text);
+    final breakMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:break|rest)|(?:break|rest)\s*(\d+)').firstMatch(text);
+    final setsMatch = RegExp(r'(\d+)\s*(?:set|sets|round|rounds)').firstMatch(text);
+
+    return ParsedVoiceCommand(
+      name: nameMatch?.group(1) ?? nameMatch?.group(2),
+      workMinutes: int.tryParse(workMatch?.group(1) ?? workMatch?.group(2) ?? ''),
+      breakMinutes: int.tryParse(breakMatch?.group(1) ?? breakMatch?.group(2) ?? ''),
+      sets: int.tryParse(setsMatch?.group(1) ?? ''),
+      simpleTimerMinutes: int.tryParse(simpleTimerMatch?.group(1) ?? ''),
+    );
+  }
+
+  Future<void> startListening({
+    required Function(ParsedVoiceCommand data) onCommand,
+  }) async {
+    if (_isListening) return;
+
+    await _speech.listen(
+      onResult: (result) async {
+        if (result.finalResult) {
+          final recognized = result.recognizedWords.toLowerCase();
+          debugPrint('🎙 Recognized: $recognized');
+
+          final parsed = await interpretCommand(recognized);
+          if (parsed != null) {
+            onCommand(parsed);
+          } else {
+            await speak("Sorry, I didn't understand that command.");
+          }
+        }
+      },
+    );
+
+    _isListening = true;
+  }
 }
+
+
+

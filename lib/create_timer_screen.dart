@@ -4,27 +4,6 @@ import 'countdown_screen.dart';
 import 'timer_model.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
-// TimerData class remains the same
-/*
-class TimerData {
-  final String name;
-  final int totalTime;
-  final int workInterval;
-  final int breakInterval;
-  final int currentSet;
-  final int totalSets;
-
-  TimerData({
-    required this.name,
-    required this.totalTime,
-    required this.workInterval,
-    required this.breakInterval,
-    required this.currentSet,
-    required this.totalSets,
-  });
-}
-*/
-
 class CreateTimerScreen extends StatefulWidget {
   final TimerData? existingTimer;
   const CreateTimerScreen({super.key, this.existingTimer});
@@ -167,7 +146,7 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
         Future.delayed(const Duration(milliseconds: 750), () {
           _speech.stop();
           setState(() => _isListening = false);
-          _startCountdown(simpleTimerMinutes: simpleMinutes);
+          startCountdown(simpleTimerMinutes: simpleMinutes);
         });
         return;
       }
@@ -181,13 +160,13 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
       Future.delayed(const Duration(milliseconds: 750), () {
         _speech.stop();
         setState(() => _isListening = false);
-        _startCountdown();
+        startCountdown();
       });
     }
   }
 
   // UPDATED: Core logic for starting the timer is changed here.
-  void _startCountdown({int? simpleTimerMinutes}) {
+  void startCountdown({int? simpleTimerMinutes}) {
 
     int workTime;
     int breakTime;
@@ -332,7 +311,7 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
           ),
           const SizedBox(height: 32),
           ElevatedButton.icon(
-            onPressed: _startCountdown,
+            onPressed: startCountdown,
             icon: const Icon(Icons.timer_outlined, size: 22),
             label: const Text(
               'Save and Start Timer',
