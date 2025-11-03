@@ -6,7 +6,9 @@ import 'package:flutter_tts/flutter_tts.dart';
 
 class CreateTimerScreen extends StatefulWidget {
   final TimerData? existingTimer;
-  const CreateTimerScreen({super.key, this.existingTimer});
+  final Function(TimerData)? onSaveTimer;
+
+  const CreateTimerScreen({super.key, this.existingTimer, this.onSaveTimer});
 
 
   @override
@@ -212,8 +214,9 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     // 5. Return the saved data to the previous screen (HomeScreen)
     //Navigator.of(context).pop(timerData);
 
-    // 5. Navigate to the countdown screen.
+    widget.onSaveTimer?.call(timerData);
 
+    // 5. Navigate to the countdown screen.
     Navigator.push(
       context,
       MaterialPageRoute(

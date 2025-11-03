@@ -26,10 +26,9 @@ class SettingsPage extends StatelessWidget {
     await prefs.setBool('hasSeenWelcome', false);
 
     if (context.mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const WelcomePage()),
-            (route) => false, // Clears all previous routes
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const WelcomePage()),
+            (route) => false,
       );
     }
   }

@@ -194,29 +194,41 @@ class VoiceController {
     );
   }
 
-  Future<void> startListening({
-    required Function(ParsedVoiceCommand data) onCommand,
-  }) async {
-    if (_isListening) return;
+  Future<void> startListening({required Function(ParsedVoiceCommand) onCommand}) async {
+    if (!_isInitialized) await initialize(); // initialize only once
+
+    if (_isListening) {
+      debugPrint("Already listening, ignoring new start request.");
+      return;
+    }
+
+    final hasPermission = await _speech.hasPermission;
+    if (!hasPermission) {
+      final bool granted = await _speech.initialize();
+      if (!granted) {
+        debugPrint("Speech recognition permission not granted.");
+        return;
+      }
+    }
+
+    _isListening = true;
+    debugPrint("🎤 Starting microphone...");
 
     await _speech.listen(
       onResult: (result) async {
+        debugPrint("Heard: ${result.recognizedWords}");
         if (result.finalResult) {
-          final recognized = result.recognizedWords.toLowerCase();
-          debugPrint('🎙 Recognized: $recognized');
-
-          final parsed = await interpretCommand(recognized);
-          if (parsed != null) {
-            onCommand(parsed);
-          } else {
-            await speak("Sorry, I didn't understand that command.");
-          }
+          final parsed = await interpretCommand(result.recognizedWords);
+          if (parsed != null) onCommand(parsed);
+          await stopListening();
         }
       },
+      onSoundLevelChange: (level) {
+        // optional: handle mic level for UI
+      },
     );
-
-    _isListening = true;
   }
+
 }
 
 

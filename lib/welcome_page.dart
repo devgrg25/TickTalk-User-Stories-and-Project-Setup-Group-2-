@@ -194,12 +194,7 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
         await _tts.setSpeechRate(0.50);     // restore your global rate
       }
 
-// ✅ After the Normal Mode tutorial, return to a fresh Home page
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-            (route) => false,
-      );
 
       return;
     }

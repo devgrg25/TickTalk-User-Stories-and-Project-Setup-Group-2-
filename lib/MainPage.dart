@@ -26,6 +26,7 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
   bool _isListening = false;
+  TimerData? _editingTimer;
 
   final FlutterTts _tts = FlutterTts();
   final VoiceController _voiceController = VoiceController();
@@ -43,13 +44,11 @@ class _MainPageState extends State<MainPage> {
       speak: _speak,
       playTimer: _playTimerV,
     );
-    _initPage();
+    _loadTimers();
   }
 
-  Future<void> _initPage() async {
-    await _voiceController.initialize();
-    await _loadTimers();
-    await _speak("You are now on the home page.");
+  void _switchTab(int index) {
+    setState(() => _selectedIndex = index);
   }
 
   Future<void> _loadTimers() async {
@@ -63,6 +62,40 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
+  Future<void> _saveTimers() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String timersString =
+    jsonEncode(_timers.map((timer) => timer.toJson()).toList());
+    await prefs.setString(_timersKey, timersString);
+  }
+
+  void _deleteTimer(String timerId) {
+    setState(() {
+      _timers.removeWhere((timer) => timer.id == timerId);
+    });
+    _saveTimers();
+  }
+
+  void _editTimer(TimerData timerToEdit) {
+    setState(() {
+      _editingTimer = timerToEdit;
+      _selectedIndex = 1;
+    });
+  }
+
+  void _addOrUpdateTimer(TimerData timer) async {
+    final index = _timers.indexWhere((t) => t.id == timer.id);
+    setState(() {
+      if (index != -1) {
+        _timers[index] = timer;
+      } else {
+        _timers.add(timer);
+      }
+    });
+    await _saveTimers();
+  }
+
+
   void _playTimerV(TimerDataV timerToPlay) {
     Navigator.push(
       context,
@@ -71,6 +104,16 @@ class _MainPageState extends State<MainPage> {
       ),
     );
   }
+
+  void _playTimer(TimerData timerToPlay) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CountdownScreen(timerData: timerToPlay),
+      ),
+    );
+  }
+
 
   Future<void> _speak(String text) async {
     try {
@@ -95,13 +138,18 @@ class _MainPageState extends State<MainPage> {
           // 🎯 Go to CreateTimerScreen and fill recognized values
           _voiceController.speak("Opening create timer screen.");
 
+        final work = data.workMinutes ?? data.simpleTimerMinutes ?? 0;
+        final sets = data.sets ?? 1;
+        final breaks = data.breakMinutes ?? 0;
+        final totalTime = (work * sets) + (breaks * (sets - 1));
+
           final timerData = TimerData(
             id: DateTime.now().toIso8601String(),
             name: data.name ?? "New Timer",
-            workInterval: (data.workMinutes ?? data.simpleTimerMinutes ?? 0),
-            breakInterval: (data.breakMinutes ?? 0),
+            workInterval: work,
+            breakInterval: breaks,
             totalSets: data.sets ?? 1,
-            totalTime: (data.workMinutes ?? data.simpleTimerMinutes ?? 0 * (data.sets ?? 1)) + ((data.breakMinutes ?? 0) * ((data.sets ?? 1) - 1)),
+            totalTime: totalTime,
             currentSet: 1,
           );
 
@@ -127,11 +175,26 @@ class _MainPageState extends State<MainPage> {
     super.dispose();
   }
 
+  void _addTimer(TimerData newTimer) async {
+    setState(() {
+      _timers.add(newTimer);
+    });
+    await _saveTimers();
+  }
+
   // ----------------- PAGES LIST -----------------
   List<Widget> get _pages => [
-    const HomeScreen(),
+    HomeScreen(
+      timers: _timers,
+      onPlayTimer: _playTimer,
+      onEditTimer: _editTimer,
+      onDeleteTimer: _deleteTimer,
+      onSwitchTab: _switchTab,
+    ),
     CreateTimerScreen(key: ValueKey(_voiceFilledTimer?.id ?? DateTime.now().millisecondsSinceEpoch),
-      existingTimer: _voiceFilledTimer,),
+      existingTimer: _editingTimer ?? _voiceFilledTimer,
+      onSaveTimer: _addTimer,
+    ),
     RoutinesPage(routines: _routines),
     const Placeholder(), // Activity page
     const StopwatchModeSelector(),
@@ -140,7 +203,18 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_selectedIndex],
+      body: Stack(
+        children: List.generate(_pages.length, (index) {
+          return Offstage(
+            offstage: _selectedIndex != index,
+            child: Navigator(
+              onGenerateRoute: (_) => MaterialPageRoute(
+                builder: (_) => _pages[index],
+              ),
+            ),
+          );
+        }),
+      ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

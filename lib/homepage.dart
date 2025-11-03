@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:convert';
-
 import 'settings_page.dart';
 import 'stopwatch_normal_mode.dart';
 import 'create_timer_screen.dart';
@@ -12,12 +11,23 @@ import 'countdown_screenV.dart';
 import 'stopwatchmodeselecter.dart';
 import 'voice_controller.dart';
 import 'routine_timer_model.dart';
-
-import 'routines.dart'; // <-- Imports NEW routines
-import 'routines_page.dart';
+import 'routines.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final List<TimerData> timers;
+  final Function(TimerData) onPlayTimer;
+  final Function(TimerData) onEditTimer;
+  final Function(String) onDeleteTimer;
+  final void Function(int) onSwitchTab;
+
+  const HomeScreen({
+    super.key,
+    required this.timers,
+    required this.onPlayTimer,
+    required this.onEditTimer,
+    required this.onDeleteTimer,
+    required this.onSwitchTab,
+  });
 
   @override
   State<HomeScreen> createState() => HomeScreenState();
@@ -26,10 +36,9 @@ class HomeScreen extends StatefulWidget {
 class HomeScreenState extends State<HomeScreen> {
   final FlutterTts _tts = FlutterTts();
   final VoiceController _voiceController = VoiceController();
+  bool _isListening = false;
   late PredefinedRoutines _routines;
 
-  bool _isListening = false;
-  List<TimerData> _timers = [];
   static const String _timersKey = 'saved_timers_list';
 
   @override
@@ -64,10 +73,11 @@ class HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initPage() async {
     await _voiceController.initialize();
-    await _loadTimers();
+    //await _loadTimers();
+    await Future.delayed(const Duration(milliseconds: 1000));
     await _tts.speak("You are now on the home page.");
   }
-
+/*
   Future<void> _loadTimers() async {
     final prefs = await SharedPreferences.getInstance();
     final String? timersString = prefs.getString(_timersKey);
@@ -86,24 +96,25 @@ class HomeScreenState extends State<HomeScreen> {
     await prefs.setString(_timersKey, timersString);
   }
 
-  void _addOrUpdateTimer(TimerData timer) {
-    final index = _timers.indexWhere((t) => t.id == timer.id);
-    setState(() {
-      if (index != -1) {
-        _timers[index] = timer;
-      } else {
-        _timers.add(timer);
-      }
-    });
-    _saveTimers();
-  }
-
   void _deleteTimer(String timerId) {
     setState(() {
       _timers.removeWhere((timer) => timer.id == timerId);
     });
     _saveTimers();
   }
+
+  void _addOrUpdateTimer(TimerData timer) {
+    final index = widget.timers.indexWhere((t) => t.id == timer.id);
+    setState(() {
+      if (index != -1) {
+        widget.timers[index] = timer;
+      } else {
+        widget.timers.add(timer);
+      }
+    });
+    _saveTimers();
+  }
+
 
   void _openCreateTimerScreen() async {
     final result = await Navigator.push<TimerData>(
@@ -124,6 +135,7 @@ class HomeScreenState extends State<HomeScreen> {
     );
     if (result != null) _addOrUpdateTimer(result);
   }
+ */
 
   void _playTimer(TimerData timerToPlay) {
     Navigator.push(
@@ -149,7 +161,7 @@ class HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => const StopwatchModeSelector()),
     );
   }
-
+/*
   Future<void> _startListening() async {
     if (_isListening) return;
     setState(() => _isListening = true);
@@ -160,11 +172,12 @@ class HomeScreenState extends State<HomeScreen> {
       }
     });
   }
-
+ */
   Future<void> _stopListening() async {
     setState(() => _isListening = false);
     await _voiceController.stopListening();
   }
+
 
   @override
   void dispose() {
@@ -220,7 +233,10 @@ class HomeScreenState extends State<HomeScreen> {
       // ----------------------- MAIN BODY ------------------------
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.only(bottom: 110), // increased from 90
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).padding.bottom + 16,
+          ),
+          // increased from 90
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
@@ -243,7 +259,7 @@ class HomeScreenState extends State<HomeScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: _openCreateTimerScreen,
+                    onPressed: () => widget.onSwitchTab(1),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -301,7 +317,7 @@ class HomeScreenState extends State<HomeScreen> {
                       color: Colors.black87),
                 ),
                 const SizedBox(height: 12),
-                _timers.isEmpty
+                widget.timers.isEmpty
                     ? const Center(
                   child: Padding(
                     padding: EdgeInsets.all(32.0),
@@ -315,17 +331,17 @@ class HomeScreenState extends State<HomeScreen> {
                   shrinkWrap: true,
                   padding: const EdgeInsets.only(bottom: 40),
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _timers.length,
+                  itemCount: widget.timers.length,
                   itemBuilder: (context, index) {
-                    final timer = _timers[index];
+                    final timer = widget.timers[index];
                     return TimerCard(
                       title: timer.name,
                       status: 'Ready',
                       feedback: 'Audio + Haptic',
                       color: const Color(0xFF007BFF),
-                      onPlay: () => _playTimer(timer),
-                      onEdit: () => _editTimer(timer),
-                      onDelete: () => _deleteTimer(timer.id),
+                      onPlay: () => widget.onPlayTimer(timer),
+                      onEdit: () => widget.onEditTimer(timer),
+                      onDelete: () => widget.onDeleteTimer(timer.id),
                     );
                   },
                 ),
@@ -334,79 +350,6 @@ class HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-
-      // ----------------------- BOTTOM MIC BAR ------------------------
-      /*bottomSheet: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            BottomNavigationBar(
-              selectedItemColor: const Color(0xFF007BFF),
-              unselectedItemColor: Colors.grey,
-              type: BottomNavigationBarType.fixed,
-              onTap: (index) {
-                if (index == 1) {
-                  _openCreateTimerScreen();
-                }
-                else if(index == 2){
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => RoutinesPage(routines: _routines),
-                    ),
-                  );
-                }
-                else if (index == 4) {
-                  _openStopwatchSelector();
-                }
-              },
-              items: const [
-                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-                BottomNavigationBarItem(
-                    icon: Icon(Icons.add_circle_outline), label: 'Create'),
-                BottomNavigationBarItem(
-                    icon: Icon(Icons.list_alt), label: 'Routines'),
-                BottomNavigationBarItem(
-                    icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
-                BottomNavigationBarItem(
-                    icon: Icon(Icons.timer), label: 'Stopwatch'),
-              ],
-            ),
-            GestureDetector(
-              onTap: _isListening ? _stopListening : _startListening,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                color: _isListening
-                    ? Colors.redAccent
-                    : const Color(0xFF007BFF),
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    vertical: 28), // doubled tap area here
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _isListening ? Icons.mic : Icons.mic_off,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _isListening
-                          ? "Listening... Tap to stop"
-                          : "Tap to Speak",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),*/
     );
   }
 }
