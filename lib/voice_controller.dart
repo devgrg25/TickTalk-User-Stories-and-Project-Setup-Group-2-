@@ -79,7 +79,7 @@ class VoiceController {
   }
 
   /// Start listening for speech and run optional callback when complete
-  Future<void> listenAndRecognize({VoidCallback? onComplete}) async {
+  /*Future<void> listenAndRecognize({VoidCallback? onComplete}) async {
     try {
       if (_isListening) return;
       _isListening = true;
@@ -127,7 +127,7 @@ class VoiceController {
       _isListening = false;
       onComplete?.call();
     }
-  }
+  }*/
 
   /// Stop listening manually
   Future<void> stopListening() async {
@@ -176,12 +176,10 @@ class VoiceController {
   Future<ParsedVoiceCommand?> interpretCommand(String command) async {
     final text = command.toLowerCase();
 
-    final simpleTimerMatch = RegExp(
-        r'(?:start|create)(?: a)?(?: timer)?(?: for)? (\d+)\s*(?:minute|min|mins)?'
-    ).firstMatch(text);
-
     final nameMatch = RegExp(r'start a (\w+) timer|create a (\w+) timer').firstMatch(text);
-    final workMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:work|focus|session)|(?:work|focus|session)\s*(\d+)').firstMatch(text);
+    final workMatch = RegExp(
+        r'(?:for\s*)?(\d+)\s*(?:minute|min|mins)?\s*(?:of\s*)?(?:work|focus|session)?'
+    ).firstMatch(text);
     final breakMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:break|rest)|(?:break|rest)\s*(\d+)').firstMatch(text);
     final setsMatch = RegExp(r'(\d+)\s*(?:set|sets|round|rounds)').firstMatch(text);
 
@@ -190,45 +188,38 @@ class VoiceController {
       workMinutes: int.tryParse(workMatch?.group(1) ?? workMatch?.group(2) ?? ''),
       breakMinutes: int.tryParse(breakMatch?.group(1) ?? breakMatch?.group(2) ?? ''),
       sets: int.tryParse(setsMatch?.group(1) ?? ''),
-      simpleTimerMinutes: int.tryParse(simpleTimerMatch?.group(1) ?? ''),
     );
   }
 
-  Future<void> startListening({required Function(ParsedVoiceCommand) onCommand}) async {
-    if (!_isInitialized) await initialize(); // initialize only once
+  Future<void> startListeningForTimer({
+    required Function(ParsedVoiceCommand) onCommand,
+  }) async {
+    if (!_isInitialized) await initialize();
 
     if (_isListening) {
-      debugPrint("Already listening, ignoring new start request.");
+      debugPrint("Already listening...");
       return;
     }
 
-    final hasPermission = await _speech.hasPermission;
-    if (!hasPermission) {
-      final bool granted = await _speech.initialize();
-      if (!granted) {
-        debugPrint("Speech recognition permission not granted.");
-        return;
-      }
-    }
-
     _isListening = true;
-    debugPrint("🎤 Starting microphone...");
 
     await _speech.listen(
       onResult: (result) async {
-        debugPrint("Heard: ${result.recognizedWords}");
         if (result.finalResult) {
           final parsed = await interpretCommand(result.recognizedWords);
+          debugPrint(result.recognizedWords);
           if (parsed != null) onCommand(parsed);
           await stopListening();
         }
       },
-      onSoundLevelChange: (level) {
-        // optional: handle mic level for UI
-      },
+      listenOptions: stt.SpeechListenOptions(
+        partialResults: true,
+        cancelOnError: true,
+        autoPunctuation: true,
+        enableHapticFeedback: true,
+      ),
     );
   }
-
 }
 
 

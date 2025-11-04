@@ -130,7 +130,7 @@ class _MainPageState extends State<MainPage> {
     if (_isListening) return;
     setState(() => _isListening = true);
 
-    await _voiceController.startListening(
+    await _voiceController.startListeningForTimer(
       onCommand: (ParsedVoiceCommand data) async {
 
         await _voiceController.stopListening();
