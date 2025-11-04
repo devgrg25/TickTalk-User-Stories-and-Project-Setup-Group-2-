@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'countdown_screen.dart';
 import 'timer_model.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -12,13 +13,15 @@ class CreateTimerScreen extends StatefulWidget {
   State<CreateTimerScreen> createState() => _CreateTimerScreenState();
 }
 
-class _CreateTimerScreenState extends State<CreateTimerScreen> {
+class _CreateTimerScreenState extends State<CreateTimerScreen>
+    with SingleTickerProviderStateMixin {
   final _nameController = TextEditingController();
   final _workIntervalController = TextEditingController();
   final _breakIntervalController = TextEditingController();
   final _setsController = TextEditingController();
 
   late FlutterTts _tts;
+  late AnimationController _clockController;
 
   bool get _isEditing => widget.existingTimer != null;
 
@@ -27,6 +30,10 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     super.initState();
     _tts = FlutterTts();
     _initTts();
+
+    _clockController =
+    AnimationController(vsync: this, duration: const Duration(seconds: 60))
+      ..repeat();
 
     if (_isEditing) {
       _nameController.text = widget.existingTimer!.name;
@@ -54,6 +61,7 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     _breakIntervalController.dispose();
     _setsController.dispose();
     _tts.stop();
+    _clockController.dispose();
     super.dispose();
   }
 
@@ -91,10 +99,7 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
       currentSet: 1,
     );
 
-    // Return data to home
     Navigator.of(context).pop(timerData);
-
-    // ✅ Navigate directly to CountdownScreen (it already uses GlobalScaffold internally)
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -110,7 +115,7 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     return GlobalScaffold(
       appBar: AppBar(
         title: const Text(
-          'Create New Timer',
+          'Create Timer',
           style: TextStyle(color: Colors.black),
         ),
         backgroundColor: Colors.white,
@@ -118,12 +123,13 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
         leading: const BackButton(color: Colors.black),
       ),
 
-      // ✅ FIXED: use child instead of body
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+      // 🧩 ONE-PAGE COMPACT BODY (no scroll)
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // 🔹 TIMER DETAILS (compact card style)
             _buildSectionCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,57 +139,74 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
                     style:
                     TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   _buildTextField(
                     controller: _nameController,
-                    label: 'Timer Name',
+                    label: 'Name',
                     icon: Icons.label_outline,
-                    hint: 'e.g., Morning Workout',
+                    hint: 'e.g., Workout Routine',
                   ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
-                    controller: _workIntervalController,
-                    label: 'Work Interval (minutes)',
-                    icon: Icons.fitness_center_outlined,
-                    keyboardType: TextInputType.number,
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _workIntervalController,
+                          label: 'Work (min)',
+                          icon: Icons.fitness_center_outlined,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _breakIntervalController,
+                          label: 'Break (min)',
+                          icon: Icons.pause_circle_outline,
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
-                    controller: _breakIntervalController,
-                    label: 'Break Interval (minutes)',
-                    icon: Icons.pause_circle_outline,
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 10),
                   _buildTextField(
                     controller: _setsController,
-                    label: 'Number of Sets',
+                    label: 'Sets',
                     icon: Icons.repeat,
                     keyboardType: TextInputType.number,
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: _startCountdown,
-              icon: const Icon(Icons.timer_outlined, size: 22),
-              label: const Text(
-                'Save and Start Timer',
-                style:
-                TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+            const SizedBox(height: 25),
+
+            // 🔹 METALLIC CLOCK (Tap to Start)
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: _startCountdown,
+                    child: CustomPaint(
+                      size: const Size(180, 180),
+                      painter: _MetallicClockPainter(
+                        animation: _clockController,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Tap the clock to start',
+                    style: TextStyle(
+                      color: Colors.black54,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 20),
-            // 👇 Mic handled globally
           ],
         ),
       ),
@@ -195,8 +218,15 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.grey.shade300),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
       ),
       child: child,
     );
@@ -213,12 +243,16 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      style: const TextStyle(fontSize: 15),
       decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: Colors.grey[600]),
+        prefixIcon: Icon(icon, color: Colors.grey[600], size: 20),
         labelText: label,
         hintText: hint,
+        isDense: true,
         filled: true,
         fillColor: Colors.white,
+        contentPadding:
+        const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12.0),
           borderSide: BorderSide(color: Colors.grey.shade300),
@@ -230,4 +264,78 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
       ),
     );
   }
+}
+
+class _MetallicClockPainter extends CustomPainter {
+  final Animation<double> animation;
+  _MetallicClockPainter({required this.animation}) : super(repaint: animation);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    // Metallic gradient background
+    final basePaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF444444), Color(0xFF222222)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(Rect.fromCircle(center: center, radius: radius))
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius, basePaint);
+
+    // Border ring
+    final borderPaint = Paint()
+      ..color = Colors.grey.shade700
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8;
+    canvas.drawCircle(center, radius - 4, borderPaint);
+
+    final now = DateTime.now();
+    final secondAngle = (now.second + animation.value * 60) * 6 * math.pi / 180;
+    final minuteAngle = (now.minute + now.second / 60) * 6 * math.pi / 180;
+    final hourAngle =
+        ((now.hour % 12) + now.minute / 60) * 30 * math.pi / 180;
+
+    // Hour hand
+    final hourHand = Paint()
+      ..color = Colors.grey.shade300
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+        center,
+        Offset(center.dx + 35 * math.sin(hourAngle),
+            center.dy - 35 * math.cos(hourAngle)),
+        hourHand);
+
+    // Minute hand
+    final minuteHand = Paint()
+      ..color = Colors.grey.shade400
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+        center,
+        Offset(center.dx + 50 * math.sin(minuteAngle),
+            center.dy - 50 * math.cos(minuteAngle)),
+        minuteHand);
+
+    // Second hand
+    final secondHand = Paint()
+      ..color = Colors.redAccent
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+        center,
+        Offset(center.dx + 60 * math.sin(secondAngle),
+            center.dy - 60 * math.cos(secondAngle)),
+        secondHand);
+
+    // Center pin
+    final pin = Paint()..color = Colors.grey.shade800;
+    canvas.drawCircle(center, 6, pin);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'settings_page.dart';
 import 'stopwatch_normal_mode.dart';
@@ -12,9 +13,8 @@ import 'countdown_screenV.dart';
 import 'stopwatchmodeselecter.dart';
 import 'voice_controller.dart';
 import 'routine_timer_model.dart';
-
-import 'routines.dart'; // <-- Imports NEW routines
 import 'routines_page.dart';
+import 'routines.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -23,7 +23,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => HomeScreenState();
 }
 
-class HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final FlutterTts _tts = FlutterTts();
   final VoiceController _voiceController = VoiceController();
   late PredefinedRoutines _routines;
@@ -31,6 +31,8 @@ class HomeScreenState extends State<HomeScreen> {
   bool _isListening = false;
   List<TimerData> _timers = [];
   static const String _timersKey = 'saved_timers_list';
+
+  late final AnimationController _micController;
 
   @override
   void initState() {
@@ -40,6 +42,11 @@ class HomeScreenState extends State<HomeScreen> {
       stopListening: _stopListening,
       speak: _speak,
       playTimer: _playTimerV,
+    );
+
+    _micController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
     );
   }
 
@@ -132,15 +139,6 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openNormalStopwatch({bool autoStart = false}) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => StopwatchNormalMode(autoStart: autoStart),
-      ),
-    );
-  }
-
   void _openStopwatchSelector() {
     Navigator.push(
       context,
@@ -149,11 +147,12 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   // -----------------------------------------------------------------
-  // VOICE LISTENING + COMMAND HANDLING
+  // VOICE HANDLING
   // -----------------------------------------------------------------
   Future<void> _startListening() async {
     if (_isListening) return;
     setState(() => _isListening = true);
+    _micController.repeat();
 
     await _voiceController.listenAndRecognize(
       onCommandRecognized: (String command) async {
@@ -167,13 +166,11 @@ class HomeScreenState extends State<HomeScreen> {
             normalized == 'timer') {
           await _tts.speak("Opening timer creation screen.");
           _openCreateTimerScreen();
-
         } else if (normalized.contains('start stopwatch') ||
             normalized.contains('open stopwatch') ||
             normalized == 'stopwatch') {
           await _tts.speak("Opening stopwatch.");
           _openStopwatchSelector();
-
         } else if (normalized.contains('open settings') ||
             normalized == 'settings') {
           await _tts.speak("Opening settings.");
@@ -181,7 +178,6 @@ class HomeScreenState extends State<HomeScreen> {
             context,
             MaterialPageRoute(builder: (context) => const SettingsPage()),
           );
-
         } else {
           await _tts.speak("Sorry, I didn't understand that command.");
         }
@@ -189,6 +185,7 @@ class HomeScreenState extends State<HomeScreen> {
       onComplete: () {
         if (mounted) {
           setState(() => _isListening = false);
+          _micController.stop();
         }
       },
     );
@@ -196,6 +193,7 @@ class HomeScreenState extends State<HomeScreen> {
 
   Future<void> _stopListening() async {
     setState(() => _isListening = false);
+    _micController.stop();
     await _voiceController.stopListening();
   }
 
@@ -203,11 +201,12 @@ class HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _tts.stop();
     _voiceController.dispose();
+    _micController.dispose();
     super.dispose();
   }
 
   // -----------------------------------------------------------------
-  // UI SECTION
+  // UI
   // -----------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
@@ -260,73 +259,11 @@ class HomeScreenState extends State<HomeScreen> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.add_circle_outline, size: 24),
-                    label: const Text(
-                      'Create New Timer',
-                      style:
-                      TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF007BFF),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: _openCreateTimerScreen,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Pre-defined Timer Routines',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black87),
-                ),
-                const SizedBox(height: 12),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      RoutineCard(
-                        title: 'Mindfulness Minute',
-                        description:
-                        'Structured meditation with spoken intervals.',
-                        icon: Icons.spa_outlined,
-                        onPressed: () async {
-                          await _tts.speak(
-                              "Starting Mindfulness Minute. Relax and focus on your breathing.");
-                        },
-                      ),
-                      RoutineCard(
-                        title: 'Simple Laundry Cycle',
-                        description:
-                        'Timed steps for washing, drying, and sorting items.',
-                        icon: Icons.local_laundry_service_outlined,
-                        onPressed: () async {
-                          await _tts.speak(
-                              "Starting Simple Laundry Cycle. Begin by loading your clothes.");
-                        },
-                      ),
-                      RoutineCard(
-                        title: 'The 20-20-20 Rule',
-                        description:
-                        'Reminds you to rest your eyes every 20 minutes.',
-                        icon: Icons.remove_red_eye_outlined,
-                        onPressed: () async {
-                          await _tts.speak(
-                              "Starting 20-20-20 rule. Remember to take regular eye breaks.");
-                        },
-                      ),
-                    ],
-                  ),
+                GestureDetector(
+                  onTap: _openCreateTimerScreen,
+                  child: const RealisticClockWidget(),
                 ),
                 const SizedBox(height: 24),
                 const Text(
@@ -371,7 +308,7 @@ class HomeScreenState extends State<HomeScreen> {
         ),
       ),
 
-      // ----------------------- BOTTOM MIC BAR ------------------------
+      // ----------------------- BOTTOM BAR WITH ANIMATED MIC ------------------------
       bottomSheet: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -383,16 +320,14 @@ class HomeScreenState extends State<HomeScreen> {
               onTap: (index) {
                 if (index == 1) {
                   _openCreateTimerScreen();
-                }
-                else if(index == 2){
+                } else if (index == 2) {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => RoutinesPage(routines: _routines),
                     ),
                   );
-                }
-                else if (index == 4) {
+                } else if (index == 4) {
                   _openStopwatchSelector();
                 }
               },
@@ -419,9 +354,46 @@ class HomeScreenState extends State<HomeScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      _isListening ? Icons.mic : Icons.mic_off,
-                      color: Colors.white,
+                    // 🔹 Animated glowing mic icon
+                    AnimatedBuilder(
+                      animation: _micController,
+                      builder: (_, child) {
+                        final rotation = Tween(begin: 0.0, end: 2 * math.pi)
+                            .evaluate(_micController);
+                        return Transform.rotate(
+                          angle: rotation,
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const SweepGradient(
+                                colors: [
+                                  Color(0xFFFFBF48),
+                                  Color(0xFFBE4A1D),
+                                  Color(0xFFFFBF47),
+                                  Color(0xFFBE4A1D),
+                                  Color(0xFFFFBF48),
+                                ],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.orangeAccent.withOpacity(0.5),
+                                  blurRadius: 20,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Icon(
+                                _isListening ? Icons.mic : Icons.mic_off,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -445,62 +417,117 @@ class HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ---------------------------------------------
-// RoutineCard
-// ---------------------------------------------
-class RoutineCard extends StatelessWidget {
-  final String title;
-  final String description;
-  final IconData icon;
-  final VoidCallback? onPressed;
+// -----------------------------------------------------------------------------
+// Realistic Dark-Metallic Clock
+// -----------------------------------------------------------------------------
+class RealisticClockWidget extends StatefulWidget {
+  const RealisticClockWidget({super.key});
 
-  const RoutineCard({
-    super.key,
-    required this.title,
-    required this.description,
-    required this.icon,
-    this.onPressed,
-  });
+  @override
+  State<RealisticClockWidget> createState() => _RealisticClockWidgetState();
+}
+
+class _RealisticClockWidgetState extends State<RealisticClockWidget>
+    with TickerProviderStateMixin {
+  late final AnimationController _secondController;
+  late final AnimationController _minuteController;
+  late final AnimationController _hourController;
+
+  @override
+  void initState() {
+    super.initState();
+    _secondController =
+    AnimationController(vsync: this, duration: const Duration(seconds: 60))
+      ..repeat();
+    _minuteController =
+    AnimationController(vsync: this, duration: const Duration(hours: 1))
+      ..repeat();
+    _hourController =
+    AnimationController(vsync: this, duration: const Duration(hours: 12))
+      ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _secondController.dispose();
+    _minuteController.dispose();
+    _hourController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 180,
+      width: 250,
       height: 250,
-      margin: const EdgeInsets.only(right: 16, bottom: 8),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(vertical: 20),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: const Color(0xFF007BFF), size: 32),
-          const SizedBox(height: 12),
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black)),
-          const SizedBox(height: 6),
-          Expanded(
-            child: Text(description,
-                style: const TextStyle(fontSize: 13, color: Colors.black54),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis),
+        shape: BoxShape.circle,
+        gradient: const RadialGradient(
+          colors: [Color(0xFF333333), Color(0xFF111111)],
+          center: Alignment.center,
+          radius: 0.8,
+        ),
+        border: Border.all(color: Color(0xFFCEC5C5), width: 10),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black54,
+            blurRadius: 30,
+            offset: Offset(0, 10),
           ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: onPressed ?? () {},
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Start Routine', style: TextStyle(fontSize: 14)),
-                Icon(Icons.arrow_right_alt, size: 18),
-              ],
+        ],
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 20,
+            height: 20,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient:
+              RadialGradient(colors: [Color(0xFF666666), Color(0xFF333333)]),
             ),
+          ),
+          AnimatedBuilder(
+            animation: _hourController,
+            builder: (_, child) =>
+                Transform.rotate(angle: _hourController.value * 2 * math.pi, child: child),
+            child: Container(
+              width: 8,
+              height: 70,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1D6981), Color(0xFF444444)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderRadius: BorderRadius.all(Radius.circular(4)),
+              ),
+            ),
+          ),
+          AnimatedBuilder(
+            animation: _minuteController,
+            builder: (_, child) =>
+                Transform.rotate(angle: _minuteController.value * 2 * math.pi, child: child),
+            child: Container(
+              width: 6,
+              height: 90,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFBBBBBB), Color(0xFF666666)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderRadius: BorderRadius.all(Radius.circular(3)),
+              ),
+            ),
+          ),
+          AnimatedBuilder(
+            animation: _secondController,
+            builder: (_, child) =>
+                Transform.rotate(angle: _secondController.value * 2 * math.pi, child: child),
+            child: Container(width: 3, height: 110, color: Colors.redAccent),
           ),
         ],
       ),
@@ -508,9 +535,9 @@ class RoutineCard extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------
+// -----------------------------------------------------------------------------
 // TimerCard
-// ---------------------------------------------
+// -----------------------------------------------------------------------------
 class TimerCard extends StatelessWidget {
   final String title;
   final String status;
