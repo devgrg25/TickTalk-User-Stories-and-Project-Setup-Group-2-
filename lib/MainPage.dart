@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:convert';
-
 import 'homepage.dart';
-import 'settings_page.dart';
-import 'stopwatch_normal_mode.dart';
 import 'create_timer_screen.dart';
 import 'timer_model.dart';
 import 'countdown_screen.dart';
@@ -27,6 +24,8 @@ class _MainPageState extends State<MainPage> {
   int _selectedIndex = 0;
   bool _isListening = false;
   TimerData? _editingTimer;
+  TimerData? _activeTimer;
+
 
   final FlutterTts _tts = FlutterTts();
   final VoiceController _voiceController = VoiceController();
@@ -106,12 +105,10 @@ class _MainPageState extends State<MainPage> {
   }
 
   void _playTimer(TimerData timerToPlay) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CountdownScreen(timerData: timerToPlay),
-      ),
-    );
+    setState(() {
+      _activeTimer = timerToPlay;
+      _selectedIndex = 5;
+    });
   }
 
 
@@ -198,22 +195,32 @@ class _MainPageState extends State<MainPage> {
     RoutinesPage(routines: _routines),
     const Placeholder(), // Activity page
     const StopwatchModeSelector(),
+    _activeTimer != null
+    ? CountdownScreen(
+    timerData: _activeTimer!,
+    //onBack: _exitCountdown, // Optional for navigation back
+    )
+        : const Center(
+    child: Text(
+    'No active timer',
+    style: TextStyle(color: Colors.grey, fontSize: 18),
+    ),
+    ),
   ];
+
+  void _exitCountdown() {
+    setState(() {
+      _activeTimer = null;
+      _selectedIndex = 0; // Go back to home
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: List.generate(_pages.length, (index) {
-          return Offstage(
-            offstage: _selectedIndex != index,
-            child: Navigator(
-              onGenerateRoute: (_) => MaterialPageRoute(
-                builder: (_) => _pages[index],
-              ),
-            ),
-          );
-        }),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _pages,
       ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
@@ -222,7 +229,7 @@ class _MainPageState extends State<MainPage> {
             selectedItemColor: const Color(0xFF007BFF),
             unselectedItemColor: Colors.grey,
             type: BottomNavigationBarType.fixed,
-            currentIndex: _selectedIndex,
+            currentIndex: _selectedIndex.clamp(0, 4),
             onTap: (index) => setState(() => _selectedIndex = index),
             items: const [
               BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),

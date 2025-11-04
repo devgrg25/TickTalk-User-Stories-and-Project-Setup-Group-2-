@@ -183,12 +183,19 @@ class VoiceController {
     final breakMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:break|rest)|(?:break|rest)\s*(\d+)').firstMatch(text);
     final setsMatch = RegExp(r'(\d+)\s*(?:set|sets|round|rounds)').firstMatch(text);
 
-    return ParsedVoiceCommand(
-      name: nameMatch?.group(1) ?? nameMatch?.group(2),
-      workMinutes: int.tryParse(workMatch?.group(1) ?? workMatch?.group(2) ?? ''),
-      breakMinutes: int.tryParse(breakMatch?.group(1) ?? breakMatch?.group(2) ?? ''),
-      sets: int.tryParse(setsMatch?.group(1) ?? ''),
-    );
+    if (workMatch != null) {
+      final name = nameMatch?.group(1) ?? nameMatch?.group(2);
+      final workMinutes = int.tryParse(workMatch.group(1) ?? workMatch.group(2) ?? '');
+      final breakMinutes = int.tryParse(breakMatch?.group(1) ?? breakMatch?.group(2) ?? '');
+      final sets = int.tryParse(setsMatch?.group(1) ?? '');
+
+      return ParsedVoiceCommand(
+        name: name,
+        workMinutes: workMinutes,
+        breakMinutes: breakMinutes,
+        sets: sets,
+      );
+    }
   }
 
   Future<void> startListeningForTimer({
