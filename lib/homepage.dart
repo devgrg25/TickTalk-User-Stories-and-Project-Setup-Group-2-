@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+//import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'dart:convert';
+//import 'dart:convert';
 import 'settings_page.dart';
-import 'stopwatch_normal_mode.dart';
-import 'create_timer_screen.dart';
+//import 'stopwatch_normal_mode.dart';
+//import 'create_timer_screen.dart';
 import 'timer_model.dart';
-import 'countdown_screen.dart';
+//import 'countdown_screen.dart';
 import 'countdown_screenV.dart';
-import 'stopwatchmodeselecter.dart';
+//import 'stopwatchmodeselecter.dart';
 import 'voice_controller.dart';
 import 'routine_timer_model.dart';
 import 'routines.dart';
@@ -43,7 +43,7 @@ class HomeScreenState extends State<HomeScreen> {
   bool _isListening = false;
   late PredefinedRoutines _routines;
 
-  static const String _timersKey = 'saved_timers_list';
+  //static const String _timersKey = 'saved_timers_list';
 
   @override
   void initState() {
@@ -139,7 +139,7 @@ class HomeScreenState extends State<HomeScreen> {
     );
     if (result != null) _addOrUpdateTimer(result);
   }
- */
+
 
   void _playTimer(TimerData timerToPlay) {
     Navigator.push(
@@ -165,7 +165,7 @@ class HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => const StopwatchModeSelector()),
     );
   }
-/*
+
   Future<void> _startListening() async {
     if (_isListening) return;
     setState(() => _isListening = true);
@@ -262,15 +262,6 @@ class HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Center(
-                  child: Text(
-                    widget.activeTimer == null
-                        ? 'No timer running.'
-                        : 'Timer "${widget.activeTimer!.name}" is active!',
-                    style: const TextStyle(fontSize: 18, color: Colors.black54),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
                 const Text(
                   'Pre-defined Timer Routines',
                   style: TextStyle(
@@ -342,15 +333,25 @@ class HomeScreenState extends State<HomeScreen> {
                   itemCount: widget.timers.length,
                   itemBuilder: (context, index) {
                     final timer = widget.timers[index];
+                    final bool isActive = widget.activeTimer?.id == timer.id;
+
                     return TimerCard(
                       title: timer.name,
-                      status: 'Ready',
+                      status: isActive ? 'Active' : 'Ready',
                       feedback: 'Audio + Haptic',
-                      color: const Color(0xFF007BFF),
-                      onPlay: () => widget.onPlayTimer(timer),
+                      color: isActive ? Colors.green : const Color(0xFF007BFF),
+                      onPlay: () {
+                        if (!isActive) {
+                          widget.onStartTimer(timer);
+                        }
+                        else {
+                          widget.onPlayTimer(timer);
+                        }
+                      },
                       onEdit: () => widget.onEditTimer(timer),
                       onDelete: () => widget.onDeleteTimer(timer.id),
                     );
+
                   },
                 ),
               ],
@@ -466,7 +467,7 @@ class TimerCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(status,

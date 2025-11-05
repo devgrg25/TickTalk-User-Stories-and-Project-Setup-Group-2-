@@ -331,16 +331,22 @@ class _MainPageState extends State<MainPage> {
   ];
 
   Widget _buildBody() {
-    if (_showingCountdown && _activeTimer != null) {
-      return CountdownScreen(
-        timerData: _activeTimer!,
-        onBack: _exitCountdown,
-      );
-    }
-    // Otherwise, show tabbed content; timer keeps running in background
-    return IndexedStack(
-      index: _tabIndex,
-      children: _pages,
+    return Stack(
+      children: [
+        IndexedStack(
+          index: _tabIndex,
+          children: _pages,
+        ),
+
+        if (_activeTimer != null)
+          Offstage(
+            offstage: !_showingCountdown,
+            child: CountdownScreen(
+              timerData: _activeTimer!,
+              onBack: _exitCountdown,
+            ),
+          ),
+      ],
     );
   }
 
@@ -361,7 +367,6 @@ class _MainPageState extends State<MainPage> {
             onTap: (index) {
               setState(() {
                 _tabIndex = index;
-                _showingCountdown = false; // hide fullscreen; banner remains
               });
             },
             items: const [
@@ -406,37 +411,44 @@ class _MainPageState extends State<MainPage> {
     final active = _activeTimer;
     if (active == null) return const SizedBox.shrink();
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      color: Colors.blue.withOpacity(0.1),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Timer Name + status
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                active.name,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+    return GestureDetector(
+      onTap: () => setState(() => _showingCountdown = true), // <-- FULL BANNER IS TAPPABLE
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        color: Colors.blue.withOpacity(0.12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Name + status
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  active.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const Text("Timer Running"),
+              ],
+            ),
+
+            // Remaining time (no underline now, since whole banner is clickable)
+            Text(
+              _formatMMSS(active.totalTime),
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
               ),
-              const Text("Timer is running..."),
-            ],
-          ),
+            ),
 
-          // Remaining time
-          Text(
-            _formatMMSS(active.totalTime),
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue),
-          ),
-
-          // Cancel Button
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.red),
-            onPressed: _stopTimer,
-            tooltip: 'Stop timer',
-          ),
-        ],
+            // Stop button still works independently
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.red),
+              onPressed: _stopTimer,
+              tooltip: 'Stop timer',
+            ),
+          ],
+        ),
       ),
     );
   }

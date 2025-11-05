@@ -323,6 +323,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
               const SizedBox(height: 32),
 
               // "Tap to Speak" button
+            /*
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -342,6 +343,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
                   ),
                 ),
               ),
+              */
               const SizedBox(height: 16), // Padding at the very bottom
             ],
           ),
