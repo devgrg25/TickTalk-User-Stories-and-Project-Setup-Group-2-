@@ -201,9 +201,11 @@ class HomeScreenState extends State<HomeScreen> {
         title: const Text(
           'TickTalk',
           style: TextStyle(
-              color: Colors.black, fontWeight: FontWeight.bold, fontSize: 20),
+            color: Color(0xFF004CBE),
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
-        centerTitle: true,
         actions: [
           IconButton(
               icon: const Icon(Icons.notifications_none, color: Colors.black),

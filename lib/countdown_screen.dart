@@ -275,7 +275,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(widget.timerData.totalTime*60)}',
+                        'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(widget.timerData.totalTime)}',
                         style: TextStyle(
                             fontSize: 16,
                             color: textColor.withOpacity(0.7)),

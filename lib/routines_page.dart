@@ -22,7 +22,6 @@ class RoutinesPage extends StatelessWidget {
         title: const Text('Routines', style: TextStyle(color: textColor)),
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: const BackButton(color: textColor),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
