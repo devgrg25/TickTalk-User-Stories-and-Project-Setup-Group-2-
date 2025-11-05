@@ -7,6 +7,7 @@ import 'timer_model.dart'; // To access the TimerData class
 
 class CountdownScreen extends StatefulWidget {
   final TimerData timerData;
+  final VoidCallback? onBack;
   final int startingSet = 1;
 
   final bool tutorialMode;
@@ -17,6 +18,7 @@ class CountdownScreen extends StatefulWidget {
     required this.timerData,
     this.tutorialMode = false,
     this.onTutorialNext,
+    this.onBack,
   });
 
   @override
@@ -205,7 +207,12 @@ class _CountdownScreenState extends State<CountdownScreen> {
         elevation: 0,
         title: const Text('Active Timer', style: TextStyle(color: textColor)),
         centerTitle: true,
-        leading: const BackButton(color: textColor),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: textColor),
+          onPressed: () {
+            widget.onBack?.call();
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_none_outlined, color: textColor),
@@ -268,7 +275,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(widget.timerData.totalTime * 60)}',
+                        'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(widget.timerData.totalTime*60)}',
                         style: TextStyle(
                             fontSize: 16,
                             color: textColor.withOpacity(0.7)),

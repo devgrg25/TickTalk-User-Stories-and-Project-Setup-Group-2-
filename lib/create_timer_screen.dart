@@ -197,7 +197,7 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     // 3. Calculate the total time automatically.
     // Total Time = (Work Time * Number of Sets) + (Break Time * (Number of Sets - 1))
     // The (sets - 1) ensures no break time is added after the final set.
-    final calculatedTotalTime = (workTime * totalSets) + (breakTime * (totalSets - 1));
+    final calculatedTotalTime = ((workTime * totalSets) + (breakTime * (totalSets - 1)))*60;
 
     // 4. Create the TimerData object.
     final timerData = TimerData(
@@ -216,14 +216,15 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     //Navigator.of(context).pop(timerData);
 
     widget.onSaveTimer?.call(timerData);
+    //Navigator.of(context).pop(timerData);
 
     // 5. Navigate to the countdown screen.
-    Navigator.push(
+    /*Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => CountdownScreen(timerData: timerData),
       ),
-    );
+    );*/
   }
 
   // --- UI BUILDERS ---
@@ -235,7 +236,6 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
         title: const Text('Create New Timer', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: const BackButton(color: Colors.black),
       ),
       body: _buildFormUI(),
     );

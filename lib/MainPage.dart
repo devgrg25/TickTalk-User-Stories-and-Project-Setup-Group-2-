@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:convert';
+import 'dart:async';
+
 import 'homepage.dart';
 import 'create_timer_screen.dart';
 import 'timer_model.dart';
@@ -21,56 +23,95 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  int _selectedIndex = 0;
+  int _tabIndex = 0;
+  bool _showingCountdown = false;
   bool _isListening = false;
+
   TimerData? _editingTimer;
   TimerData? _activeTimer;
-
+  Timer? _ticker;
 
   final FlutterTts _tts = FlutterTts();
   final VoiceController _voiceController = VoiceController();
-  late PredefinedRoutines _routines;
+  late final PredefinedRoutines _routines;
 
   List<TimerData> _timers = [];
   TimerData? _voiceFilledTimer;
+
   static const String _timersKey = 'saved_timers_list';
 
+  // ---------- INIT / DISPOSE ----------
   @override
   void initState() {
     super.initState();
+
+    // TTS once
+    _initTts();
+
     _routines = PredefinedRoutines(
       stopListening: _stopListening,
       speak: _speak,
-      playTimer: _playTimerV,
+      playTimer: _playTimerV, // you said to ignore V for now; leaving hook intact
     );
+
     _loadTimers();
   }
 
-  void _switchTab(int index) {
-    setState(() => _selectedIndex = index);
+  Future<void> _initTts() async {
+    try {
+      await _tts.setLanguage('en-US');
+      await _tts.setSpeechRate(0.9);
+    } catch (_) {
+      // swallow; device/engine variance
+    }
   }
 
+  @override
+  void dispose() {
+    _tts.stop();
+    _voiceController.dispose();
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  // ---------- NAV / TABS ----------
+  void _switchTab(int index) {
+    if (!mounted) return;
+    setState(() => _tabIndex = index);
+  }
+
+  void _exitCountdown() {
+    if (!mounted) return;
+    setState(() {
+      _showingCountdown = false;
+      _tabIndex = 0; // back to Home
+    });
+  }
+
+  // ---------- PERSISTENCE ----------
   Future<void> _loadTimers() async {
     final prefs = await SharedPreferences.getInstance();
     final String? timersString = prefs.getString(_timersKey);
-    if (timersString != null) {
-      final List<dynamic> timerJson = jsonDecode(timersString);
-      setState(() {
-        _timers = timerJson.map((json) => TimerData.fromJson(json)).toList();
-      });
-    }
+    if (timersString == null) return;
+
+    final List<dynamic> timerJson = jsonDecode(timersString);
+    if (!mounted) return;
+    setState(() {
+      _timers = timerJson.map((json) => TimerData.fromJson(json)).toList();
+    });
   }
 
   Future<void> _saveTimers() async {
     final prefs = await SharedPreferences.getInstance();
     final String timersString =
-    jsonEncode(_timers.map((timer) => timer.toJson()).toList());
+    jsonEncode(_timers.map((t) => t.toJson()).toList());
     await prefs.setString(_timersKey, timersString);
   }
 
+  // ---------- CRUD ----------
   void _deleteTimer(String timerId) {
     setState(() {
-      _timers.removeWhere((timer) => timer.id == timerId);
+      _timers.removeWhere((t) => t.id == timerId);
     });
     _saveTimers();
   }
@@ -78,11 +119,11 @@ class _MainPageState extends State<MainPage> {
   void _editTimer(TimerData timerToEdit) {
     setState(() {
       _editingTimer = timerToEdit;
-      _selectedIndex = 1;
+      _tabIndex = 1;
     });
   }
 
-  void _addOrUpdateTimer(TimerData timer) async {
+  Future<void> _addOrUpdateTimer(TimerData timer) async {
     final index = _timers.indexWhere((t) => t.id == timer.id);
     setState(() {
       if (index != -1) {
@@ -94,8 +135,25 @@ class _MainPageState extends State<MainPage> {
     await _saveTimers();
   }
 
+  void _addTimer(TimerData newTimer) async {
+    setState(() {
+      _timers.add(newTimer);
+    });
+    await _saveTimers();
+  }
 
+  // ---------- TTS ----------
+  Future<void> _speak(String text) async {
+    try {
+      await _tts.speak(text);
+    } catch (e) {
+      debugPrint("TTS error: $e");
+    }
+  }
+
+  // ---------- TIMER CONTROL ----------
   void _playTimerV(TimerDataV timerToPlay) {
+    // Left as-is per your code; safe isolate
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -105,81 +163,152 @@ class _MainPageState extends State<MainPage> {
   }
 
   void _playTimer(TimerData timerToPlay) {
+    _startTimer(timerToPlay);
+  }
+
+  void _startTimer(TimerData timerData) {
+    // Ignore zero/negative durations
+    if ((timerData.totalTime) <= 0) {
+      _speak("Timer duration is zero.");
+      return;
+    }
+
+    // If this exact timer is already active, do nothing
+    if (_activeTimer?.id == timerData.id && (_ticker?.isActive ?? false)) {
+      return;
+    }
+
+    // Cancel any existing ticker
+    _ticker?.cancel();
+
+    if (!mounted) return;
     setState(() {
-      _activeTimer = timerToPlay;
-      _selectedIndex = 5;
+      // Use a detached copy to mutate countdown independently from list item
+      _activeTimer = timerData.copyWith();
+      _showingCountdown = true; // show fullscreen initially
+    });
+
+    // Periodic ticker
+    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_activeTimer == null) {
+        timer.cancel();
+        return;
+      }
+
+      // Basic single-phase countdown (work/break logic can be layered later)
+      final current = _activeTimer!;
+      final remaining = current.totalTime;
+
+      if (remaining <= 0) {
+        timer.cancel();
+        if (!mounted) return;
+
+        // Speak first (optional delay before screen change)
+        _speak("Time's up.");
+
+        // Safely return to home after a short delay
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (!mounted) return;
+          setState(() {
+            _activeTimer = null;
+            _showingCountdown = false;
+            _tabIndex = 0; // ✅ ensures home screen is shown
+          });
+        });
+        return;
+      }
+
+      // Decrement by 1s
+      setState(() {
+        _activeTimer = current.copyWith(totalTime: remaining - 1);
+      });
     });
   }
 
-
-  Future<void> _speak(String text) async {
-    try {
-      await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(0.9);
-      await _tts.speak(text);
-    } catch (e) {
-      print("TTS error: $e");
-    }
+  void _stopTimer() {
+    _ticker?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _activeTimer = null;
+      _showingCountdown = false;
+    });
   }
 
-  // ----------------- VOICE FUNCTIONS -----------------
+  // Called when Create page saves a timer
+  void _handleSaveTimer(TimerData timer) {
+    _addOrUpdateTimer(timer);
+    _startTimer(timer);
+
+    if (!mounted) return;
+    setState(() {
+      _editingTimer = null;
+      _voiceFilledTimer = null;
+      _showingCountdown = true; // jump into fullscreen view
+    });
+  }
+
+  // ---------- VOICE ----------
   Future<void> _startListening() async {
     if (_isListening) return;
+
     setState(() => _isListening = true);
 
     await _voiceController.startListeningForTimer(
       onCommand: (ParsedVoiceCommand data) async {
-
+        // stop listening before UI changes
         await _voiceController.stopListening();
-        if (mounted) setState(() => _isListening = false);
-          // 🎯 Go to CreateTimerScreen and fill recognized values
-          _voiceController.speak("Opening create timer screen.");
+        if (!mounted) return;
+        setState(() => _isListening = false);
+
+        _voiceController.speak("Opening create timer screen.");
 
         final work = data.workMinutes ?? data.simpleTimerMinutes ?? 0;
         final sets = data.sets ?? 1;
         final breaks = data.breakMinutes ?? 0;
-        final totalTime = (work * sets) + (breaks * (sets - 1));
+        final totalTime = ((work * sets) + (breaks * (sets - 1)))*60;
 
-          final timerData = TimerData(
-            id: DateTime.now().toIso8601String(),
-            name: data.name ?? "New Timer",
-            workInterval: work,
-            breakInterval: breaks,
-            totalSets: data.sets ?? 1,
-            totalTime: totalTime,
-            currentSet: 1,
-          );
+        final timerData = TimerData(
+          id: DateTime.now().toIso8601String(),
+          name: data.name ?? "New Timer",
+          workInterval: work,
+          breakInterval: breaks,
+          totalSets: sets,
+          totalTime: totalTime,
+          currentSet: 1,
+        );
 
-          // Save it for CreateTimerScreen to use
-          setState(() {
-            _voiceFilledTimer = timerData;
-            _selectedIndex = 1; // 👈 switch to “Create” tab
-          });
+        if (!mounted) return;
+        setState(() {
+          _voiceFilledTimer = timerData;
+          _tabIndex = 1; // switch to Create tab with prefill
+        });
       },
     );
   }
 
   Future<void> _stopListening() async {
     if (!_isListening) return;
-    setState(() => _isListening = false);
-    await _voiceController.stopListening();
+    try {
+      await _voiceController.stopListening();
+    } finally {
+      if (mounted) {
+        setState(() => _isListening = false);
+      }
+    }
   }
 
-  @override
-  void dispose() {
-    _tts.stop();
-    _voiceController.dispose();
-    super.dispose();
+  // ---------- UI HELPERS ----------
+  String _formatMMSS(int secondsTotal) {
+    final m = secondsTotal ~/ 60;
+    final s = secondsTotal % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  void _addTimer(TimerData newTimer) async {
-    setState(() {
-      _timers.add(newTimer);
-    });
-    await _saveTimers();
-  }
-
-  // ----------------- PAGES LIST -----------------
+  // ---------- PAGES ----------
   List<Widget> get _pages => [
     HomeScreen(
       timers: _timers,
@@ -187,50 +316,54 @@ class _MainPageState extends State<MainPage> {
       onEditTimer: _editTimer,
       onDeleteTimer: _deleteTimer,
       onSwitchTab: _switchTab,
+      onStartTimer: _startTimer,
+      activeTimer: _activeTimer,
     ),
-    CreateTimerScreen(key: ValueKey(_voiceFilledTimer?.id ?? DateTime.now().millisecondsSinceEpoch),
+    // ValueKey forces Create page to rebuild when voice prefills change
+    CreateTimerScreen(
+      key: ValueKey(_voiceFilledTimer?.id ?? 'create_static'),
       existingTimer: _editingTimer ?? _voiceFilledTimer,
-      onSaveTimer: _addTimer,
+      onSaveTimer: _handleSaveTimer,
     ),
     RoutinesPage(routines: _routines),
     const Placeholder(), // Activity page
     const StopwatchModeSelector(),
-    _activeTimer != null
-    ? CountdownScreen(
-    timerData: _activeTimer!,
-    //onBack: _exitCountdown, // Optional for navigation back
-    )
-        : const Center(
-    child: Text(
-    'No active timer',
-    style: TextStyle(color: Colors.grey, fontSize: 18),
-    ),
-    ),
   ];
 
-  void _exitCountdown() {
-    setState(() {
-      _activeTimer = null;
-      _selectedIndex = 0; // Go back to home
-    });
+  Widget _buildBody() {
+    if (_showingCountdown && _activeTimer != null) {
+      return CountdownScreen(
+        timerData: _activeTimer!,
+        onBack: _exitCountdown,
+      );
+    }
+    // Otherwise, show tabbed content; timer keeps running in background
+    return IndexedStack(
+      index: _tabIndex,
+      children: _pages,
+    );
   }
 
+  // ---------- BUILD ----------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _pages,
-      ),
+      body: _buildBody(),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (_activeTimer != null) _buildActiveTimerBanner(),
           BottomNavigationBar(
             selectedItemColor: const Color(0xFF007BFF),
             unselectedItemColor: Colors.grey,
             type: BottomNavigationBarType.fixed,
-            currentIndex: _selectedIndex.clamp(0, 4),
-            onTap: (index) => setState(() => _selectedIndex = index),
+            currentIndex: _tabIndex,
+            onTap: (index) {
+              setState(() {
+                _tabIndex = index;
+                _showingCountdown = false; // hide fullscreen; banner remains
+              });
+            },
             items: const [
               BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
               BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Create'),
@@ -262,6 +395,46 @@ class _MainPageState extends State<MainPage> {
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------- BANNER ----------
+  Widget _buildActiveTimerBanner() {
+    final active = _activeTimer;
+    if (active == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      color: Colors.blue.withOpacity(0.1),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Timer Name + status
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                active.name,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const Text("Timer is running..."),
+            ],
+          ),
+
+          // Remaining time
+          Text(
+            _formatMMSS(active.totalTime),
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue),
+          ),
+
+          // Cancel Button
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.red),
+            onPressed: _stopTimer,
+            tooltip: 'Stop timer',
           ),
         ],
       ),

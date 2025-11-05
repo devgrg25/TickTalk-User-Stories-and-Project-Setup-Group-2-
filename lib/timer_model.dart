@@ -19,6 +19,26 @@ class TimerData {
     required this.currentSet,
   });
 
+  TimerData copyWith({
+    String? id,
+    String? name,
+    int? totalTime,
+    int? workInterval,
+    int? breakInterval,
+    int? totalSets,
+    int? currentSet,
+  }) {
+    return TimerData(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      totalTime: totalTime ?? this.totalTime,
+      workInterval: workInterval ?? this.workInterval,
+      breakInterval: breakInterval ?? this.breakInterval,
+      totalSets: totalSets ?? this.totalSets,
+      currentSet: currentSet ?? this.currentSet,
+    );
+  }
+
   // Method to convert a TimerData instance to a JSON map
   Map<String, dynamic> toJson() => {
     'id': id,

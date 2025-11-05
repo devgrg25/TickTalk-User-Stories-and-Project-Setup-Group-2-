@@ -19,6 +19,8 @@ class HomeScreen extends StatefulWidget {
   final Function(TimerData) onEditTimer;
   final Function(String) onDeleteTimer;
   final void Function(int) onSwitchTab;
+  final Function(TimerData) onStartTimer;
+  final TimerData? activeTimer;
 
   const HomeScreen({
     super.key,
@@ -27,6 +29,8 @@ class HomeScreen extends StatefulWidget {
     required this.onEditTimer,
     required this.onDeleteTimer,
     required this.onSwitchTab,
+    required this.onStartTimer,
+    this.activeTimer,
   });
 
   @override
@@ -263,6 +267,15 @@ class HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+                Center(
+                  child: Text(
+                    widget.activeTimer == null
+                        ? 'No timer running.'
+                        : 'Timer "${widget.activeTimer!.name}" is active!',
+                    style: const TextStyle(fontSize: 18, color: Colors.black54),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
                 const Text(
                   'Pre-defined Timer Routines',
                   style: TextStyle(
