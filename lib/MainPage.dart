@@ -66,6 +66,20 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
+  String _generateUniqueTimerName(List<TimerData> timers) {
+    int counter = 1;
+
+    while (true) {
+      final name = "Timer $counter";
+      final exists = timers.any((t) => t.name == name);
+
+      if (!exists) return name;
+
+      counter++;
+    }
+  }
+
+
   @override
   void dispose() {
     _tts.stop();
@@ -273,7 +287,9 @@ class _MainPageState extends State<MainPage> {
 
         final timerData = TimerData(
           id: DateTime.now().toIso8601String(),
-          name: data.name ?? "New Timer",
+          name: (data.name?.trim().isNotEmpty ?? false)
+              ? data.name!
+              : _generateUniqueTimerName(_timers),
           workInterval: work,
           breakInterval: breaks,
           totalSets: sets,

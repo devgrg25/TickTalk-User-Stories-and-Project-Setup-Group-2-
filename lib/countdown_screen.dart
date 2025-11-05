@@ -86,11 +86,21 @@ class _CountdownScreenState extends State<CountdownScreen> {
         'then break for $breakMin minutes, '
         'repeat for $sets sets.';
 
+    final messageSimple = 'Starting simple timer "$name"'
+        'for $workMin minutes, ';
+
     try {
-      await _tts.stop(); // Stop any ongoing speech
-      await _tts.speak(message);
+      await _tts.stop(); // Stop any ongoing speech first
+
+      // Simple timer case: when sets == null OR sets == 1 and break is null
+      if (sets == 1) {
+        await _tts.speak(messageSimple);
+      } else {
+        await _tts.speak(message);
+      }
+
     } catch (e) {
-      print('TTS error: $e');
+      debugPrint('TTS error: $e');
     }
   }
 
