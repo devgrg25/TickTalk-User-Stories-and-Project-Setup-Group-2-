@@ -78,56 +78,44 @@ class VoiceController {
     }
   }
 
-  /// Start listening for speech and run optional callback when complete
-  /*Future<void> listenAndRecognize({VoidCallback? onComplete}) async {
-    try {
-      if (_isListening) return;
-      _isListening = true;
+  int? parseNumber(String text) {
+    const numberWords = {
+      'zero': 0,
+      'one': 1,
+      'two': 2,
+      'three': 3,
+      'four': 4,
+      'five': 5,
+      'six': 6,
+      'seven': 7,
+      'eight': 8,
+      'nine': 9,
+      'ten': 10,
+      'eleven': 11,
+      'twelve': 12,
+      'thirteen': 13,
+      'fourteen': 14,
+      'fifteen': 15,
+      'sixteen': 16,
+      'seventeen': 17,
+      'eighteen': 18,
+      'nineteen': 19,
+      'twenty': 20
+    };
 
-      debugPrint('🎤 Listening started...');
-
-      await _speech.listen(
-        onResult: (result) {
-          if (result.finalResult) {
-            final recognized = result.recognizedWords.toLowerCase();
-            debugPrint("🎙 Recognized: $recognized");
-
-            if (recognized.contains("start")) {
-              speak("Starting timer");
-            } else if (recognized.contains("stop")) {
-              speak("Stopping all timers");
-            } else if (recognized.contains("home")) {
-              speak("Navigating to home");
-            }  else {
-              _handleCommand(recognized);
-            }
-
-            stopListening();
-            onComplete?.call();
-          }
-        },
-        listenOptions: stt.SpeechListenOptions(
-          listenMode: stt.ListenMode.confirmation, // now set here
-          partialResults: true,
-          cancelOnError: true,
-          autoPunctuation: true,
-          enableHapticFeedback: true,
-          // Optional timeouts:
-          // listenFor: const Duration(seconds: 30),
-          // pauseFor: const Duration(seconds: 3),
-          // localeId: 'en_US',
-        ),
-        onSoundLevelChange: (level) {
-          // optional: handle mic level UI
-        },
-      );
-
-    } catch (e) {
-      debugPrint('❌ Listen error: $e');
-      _isListening = false;
-      onComplete?.call();
+    text = text.toLowerCase().trim();
+    if (numberWords.containsKey(text)) {
+      return numberWords[text];
     }
-  }*/
+
+    // Also allow numeric input
+    final numericMatch = RegExp(r'\d+').firstMatch(text);
+    if (numericMatch != null) {
+      return int.parse(numericMatch.group(0)!);
+    }
+
+    return null;
+  }
 
   /// Stop listening manually
   Future<void> stopListening() async {
@@ -178,10 +166,12 @@ class VoiceController {
 
     final nameMatch = RegExp(r'start a (\w+) timer|create a (\w+) timer').firstMatch(text);
     final workMatch = RegExp(
-        r'(?:for\s*)?(\d+)\s*(?:minute|min|mins)?\s*(?:of\s*)?(?:work|focus|session)?'
+        r'(?:for\s*)?(\d+)\s*(?:minute|min|mins)?\s*(?:of\s*)?(?:work|focus|session|timer||)?'
     ).firstMatch(text);
     final breakMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:break|rest)|(?:break|rest)\s*(\d+)').firstMatch(text);
-    final setsMatch = RegExp(r'(\d+)\s*(?:set|sets|round|rounds)').firstMatch(text);
+    final setsMatch = RegExp(
+        r'(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s*(?:set|sets|round|rounds)'
+    ).firstMatch(text);
 
     if (workMatch != null) {
       final name = nameMatch?.group(1) ?? nameMatch?.group(2);

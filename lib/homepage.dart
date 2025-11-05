@@ -198,14 +198,7 @@ class HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'TickTalk',
-          style: TextStyle(
-            color: Color(0xFF004CBE),
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
+        title: const Text('TickTalk', style: TextStyle(color: Color(0xFF007BFF), fontWeight: FontWeight.bold, fontSize: 30)),
         actions: [
           IconButton(
               icon: const Icon(Icons.notifications_none, color: Colors.black),
