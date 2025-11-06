@@ -444,6 +444,9 @@ class _MainPageState extends State<MainPage> {
             currentIndex: _tabIndex,
             onTap: (index) {
               setState(() {
+                if (_showingCountdown) {
+                  _showingCountdown = false;
+                }
                 _tabIndex = index;
               });
             },
