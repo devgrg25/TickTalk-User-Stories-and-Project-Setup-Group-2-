@@ -34,6 +34,7 @@ class _MainPageState extends State<MainPage> {
   final FlutterTts _tts = FlutterTts();
   final VoiceController _voiceController = VoiceController();
   late final PredefinedRoutines _routines;
+  final CountdownController _countdownController = CountdownController();
 
   List<TimerData> _timers = [];
   TimerData? _voiceFilledTimer;
@@ -65,6 +66,7 @@ class _MainPageState extends State<MainPage> {
       // swallow; device/engine variance
     }
   }
+
 
   void _pauseTimer() {
     if (_ticker == null) return;
@@ -310,10 +312,13 @@ class _MainPageState extends State<MainPage> {
           setState(() => _isListening = false);
 
           final words = cmd.toLowerCase();
+          debugPrint(words);
 
           if (words.contains("pause") || words.contains("hold")) {
+            _countdownController.pause();
             _pauseTimer();
           } else if (words.contains("resume") || words.contains("continue")) {
+            _countdownController.resume();
             _resumeTimer();
           } else if (words.contains("stop") || words.contains("end")) {
             _stopTimer();
@@ -414,6 +419,7 @@ class _MainPageState extends State<MainPage> {
             child: CountdownScreen(
               timerData: _activeTimer!,
               onBack: _exitCountdown,
+              controller: _countdownController,
             ),
           ),
       ],

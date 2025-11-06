@@ -5,11 +5,27 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'timer_model.dart'; // To access the TimerData class
 
+class CountdownController {
+  VoidCallback? _pause;
+  VoidCallback? _resume;
+
+  void _bind({
+    required VoidCallback pause,
+    required VoidCallback resume,
+  }) {
+    _pause = pause;
+    _resume = resume;
+  }
+
+  void pause() => _pause?.call();
+  void resume() => _resume?.call();
+}
+
 class CountdownScreen extends StatefulWidget {
   final TimerData timerData;
   final VoidCallback? onBack;
   final int startingSet = 1;
-
+  final CountdownController? controller;
   final bool tutorialMode;
   final VoidCallback? onTutorialNext;
 
@@ -19,6 +35,7 @@ class CountdownScreen extends StatefulWidget {
     this.tutorialMode = false,
     this.onTutorialNext,
     this.onBack,
+    this.controller,
   });
 
   @override
@@ -46,13 +63,28 @@ class _CountdownScreenState extends State<CountdownScreen> {
     _currentSet = widget.startingSet;
     _currentSeconds =
         min(widget.timerData.workInterval * 60, widget.timerData.totalTime * 60);
+
+    widget.controller?._bind(
+      pause: _pauseTimer,
+      resume: _resumeTimer,
+    );
     _initTtsAndStart();
   }
 
+  @override
+  void didUpdateWidget(covariant CountdownScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      widget.controller?._bind(
+        pause: _pauseTimer,
+        resume: _resumeTimer,
+      );
+    }
+  }
+
   Future<void> _initTtsAndStart() async {
-    await _initTts(); // wait for initialization
-    await Future.delayed(const Duration(milliseconds: 700));
-    _startTimer(); // now safe to speak
+    await _initTts();
+    _startTimer();
   }
 
   Future<void> _initTts() async {
@@ -387,5 +419,22 @@ class _CountdownScreenState extends State<CountdownScreen> {
         ),
       ],
     );
+  }
+  void _pauseTimer() {
+    if (_isPaused) return;
+    setState(() {
+      _isPaused = true;
+    });
+    _timer.cancel();
+    _speak("Timer paused.");
+  }
+
+  void _resumeTimer() {
+    if (!_isPaused) return;
+    setState(() {
+      _isPaused = false;
+    });
+    _startTimer();
+    _speak("Resumed.");
   }
 }
