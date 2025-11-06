@@ -8,17 +8,21 @@ import 'timer_model.dart'; // To access the TimerData class
 class CountdownController {
   VoidCallback? _pause;
   VoidCallback? _resume;
+  VoidCallback? _stopSpeaking;
 
   void _bind({
     required VoidCallback pause,
     required VoidCallback resume,
+    required VoidCallback stopSpeaking,
   }) {
     _pause = pause;
     _resume = resume;
+    _stopSpeaking = stopSpeaking;
   }
 
   void pause() => _pause?.call();
   void resume() => _resume?.call();
+  void stopSpeaking() => _stopSpeaking?.call();
 }
 
 class CountdownScreen extends StatefulWidget {
@@ -67,6 +71,9 @@ class _CountdownScreenState extends State<CountdownScreen> {
     widget.controller?._bind(
       pause: _pauseTimer,
       resume: _resumeTimer,
+      stopSpeaking: () {
+        _tts.stop();
+      },
     );
     _initTtsAndStart();
   }
@@ -78,6 +85,9 @@ class _CountdownScreenState extends State<CountdownScreen> {
       widget.controller?._bind(
         pause: _pauseTimer,
         resume: _resumeTimer,
+        stopSpeaking: () {
+          _tts.stop();
+        },
       );
     }
   }

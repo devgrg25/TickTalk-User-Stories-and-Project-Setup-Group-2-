@@ -302,6 +302,8 @@ class _MainPageState extends State<MainPage> {
 
   // ---------- VOICE ----------
   Future<void> _startListening() async {
+    await _tts.stop();
+    _countdownController.stopSpeaking();
     if (_isListening) return;
     setState(() => _isListening = true);
 
