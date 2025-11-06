@@ -205,7 +205,9 @@ class _RoutinesPageState extends State<RoutinesPage> {
     }
     setState(() => _isListening = true);
     await widget.voiceController.speak("Say the name of a routine to start.");
-    await widget.voiceController.listenAndRecognize(
+    await widget.voiceController.
+      
+      (
       onCommandRecognized: (cmd) { _handleVoiceCommand(cmd); },
       onComplete: () { if (mounted) setState(() => _isListening = false); },
     );
@@ -237,7 +239,6 @@ class _RoutinesPageState extends State<RoutinesPage> {
         title: const Text('Routines', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: const BackButton(color: Colors.black),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),

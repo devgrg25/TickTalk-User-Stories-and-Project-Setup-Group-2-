@@ -31,6 +31,3 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-  #  - assets/credentials.json
-    # - assets/test_audio.wav   <-- comment or remove this line

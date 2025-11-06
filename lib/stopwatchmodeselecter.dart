@@ -13,7 +13,6 @@ class StopwatchModeSelector extends StatelessWidget {
         title: const Text('Stopwatch', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: const BackButton(color: Colors.black),
       ),
       child: Padding(
         padding: const EdgeInsets.all(24.0),

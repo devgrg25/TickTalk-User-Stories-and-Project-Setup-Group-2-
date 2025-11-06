@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'countdown_screen.dart';
 import 'timer_model.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'widgets/global_scaffold.dart'; // ✅ Global mic wrapper
+import 'voice_controller.dart';
 
 class CreateTimerScreen extends StatefulWidget {
   final TimerData? existingTimer;
-  const CreateTimerScreen({super.key, this.existingTimer});
+  final Function(TimerData)? onSaveTimer;
+
+  const CreateTimerScreen({super.key, this.existingTimer, this.onSaveTimer});
 
   @override
   State<CreateTimerScreen> createState() => _CreateTimerScreenState();
@@ -58,16 +60,106 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
-    _tts.stop();
-    _tts.speak(message);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+    _tts.stop(); // stop any ongoing speech
+    _tts.speak(message); // read out the message
   }
 
-  void _startCountdown() {
-    int workTime = int.tryParse(_workIntervalController.text) ?? 0;
-    int breakTime = int.tryParse(_breakIntervalController.text) ?? 5;
-    int totalSets = int.tryParse(_setsController.text) ?? 0;
+
+  void _listen() async {
+    if (!_isListening) {
+      bool available = await _speech.initialize();
+      if (available) {
+        setState(() => _isListening = true);
+        _speech.listen(
+          onResult: (val) => setState(() {
+            _lastHeard = val.recognizedWords;
+            // UPDATED: Process the command only on the final result for efficiency.
+            if (val.finalResult) {
+              _parseVoiceCommand(_lastHeard);
+            }
+          }),
+        );
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
+    }
+  }
+
+  void _parseVoiceCommand(String command) {
+    final commandLower = command.toLowerCase();
+
+    final simpleTimerMatch = RegExp(
+        r'(?:start|create)(?: a)?(?: timer)?(?: for)? (\d+)\s*(?:minute|min|mins)?'
+    ).firstMatch(commandLower);
+
+    // --- UPDATED: More flexible Regular Expressions ---
+
+    // Captures names like "start a study timer" or "create a workout timer"
+    // The '(\w+)' looks for a single word after 'a' if 'timer' isn't the next word.
+    final nameMatch = RegExp(r'start a (\w+) timer|create a (\w+) timer').firstMatch(commandLower);
+
+    // Captures "25 minute work", "work for 25 mins", "25 min focus", "30 work"
+    final workMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:work|focus|session)|(?:work|focus|session)\s*(\d+)').firstMatch(commandLower);
+
+    // Captures "5 minute break", "rest for 10 mins", "15 min rest", "5 break"
+    final breakMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:break|rest)|(?:break|rest)\s*(\d+)').firstMatch(commandLower);
+
+    // Captures "for 4 sets", "3 rounds", "do 8 sets"
+    final setsMatch = RegExp(r'(\d+)\s*(?:set|sets|round|rounds)').firstMatch(commandLower);
+
+    // --- Logic to populate fields ---
+
+    if (nameMatch != null) {
+      // Check group 1, if null, use group 2. This handles both "start a..." and "create a..."
+      _nameController.text = nameMatch.group(1) ?? nameMatch.group(2) ?? '';
+    }
+
+    if (workMatch != null) {
+      // Check the first capture group, if it's null, use the second one.
+      // This handles cases where the number comes before or after the keyword.
+      _workIntervalController.text = workMatch.group(1) ?? workMatch.group(2) ?? '';
+    }
+
+    if (breakMatch != null) {
+      _breakIntervalController.text = breakMatch.group(1) ?? breakMatch.group(2) ?? '';
+    }
+
+    if (setsMatch != null) {
+      _setsController.text = setsMatch.group(1) ?? '';
+    }
+
+    // --- NEW: Handle simple timer separately ---
+    if (simpleTimerMatch != null) {
+      final simpleMinutes = int.tryParse(simpleTimerMatch.group(1) ?? '');
+      if (simpleMinutes != null) {
+        Future.delayed(const Duration(milliseconds: 750), () {
+          _speech.stop();
+          setState(() => _isListening = false);
+          startCountdown(simpleTimerMinutes: simpleMinutes);
+        });
+        return;
+      }
+    }
+
+    // --- Auto-start logic ---
+
+    // Checks if the command contains a trigger word and essential fields have been filled.
+    if (commandLower.contains('start') || commandLower.contains('create')) {
+      // A small delay gives the user a moment to see the fields populate before starting.
+      Future.delayed(const Duration(milliseconds: 750), () {
+        _speech.stop();
+        setState(() => _isListening = false);
+        startCountdown();
+      });
+    }
+  }
+
+  // UPDATED: Core logic for starting the timer is changed here.
+  void startCountdown({int? simpleTimerMinutes}) {
 
     if (workTime <= 0 || totalSets <= 0) {
       _showMessage('Please provide valid work time and sets.');
@@ -76,6 +168,10 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
 
     final totalTime =
         (workTime * totalSets) + (breakTime * (totalSets - 1));
+    // 3. Calculate the total time automatically.
+    // Total Time = (Work Time * Number of Sets) + (Break Time * (Number of Sets - 1))
+    // The (sets - 1) ensures no break time is added after the final set.
+    final calculatedTotalTime = ((workTime * totalSets) + (breakTime * (totalSets - 1)))*60;
 
     final timerData = TimerData(
       id: _isEditing
@@ -91,16 +187,19 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
       currentSet: 1,
     );
 
-    // Return data to home
-    Navigator.of(context).pop(timerData);
+    // 5. Return the saved data to the previous screen (HomeScreen)
+    //Navigator.of(context).pop(timerData);
 
-    // ✅ Navigate directly to CountdownScreen (it already uses GlobalScaffold internally)
-    Navigator.push(
+    widget.onSaveTimer?.call(timerData);
+    //Navigator.of(context).pop(timerData);
+
+    // 5. Navigate to the countdown screen.
+    /*Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => CountdownScreen(timerData: timerData),
       ),
-    );
+    );*/
   }
 
   @override
@@ -115,7 +214,6 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
         ),
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: const BackButton(color: Colors.black),
       ),
 
       // ✅ FIXED: use child instead of body
@@ -180,6 +278,26 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+                const SizedBox(height: 8),
+                Text(_isListening ? "Listening..." : _lastHeard,
+                    style: TextStyle(color: Colors.grey[700])),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: startCountdown,
+            icon: const Icon(Icons.timer_outlined, size: 22),
+            label: const Text(
+              'Save and Start Timer',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryBlue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
             const SizedBox(height: 20),

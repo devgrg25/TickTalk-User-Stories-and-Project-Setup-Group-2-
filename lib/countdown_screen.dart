@@ -5,9 +5,31 @@ import 'package:flutter/material.dart';
 import 'timer_model.dart';
 import 'widgets/global_scaffold.dart'; // ✅ Import global mic wrapper
 
+class CountdownController {
+  VoidCallback? _pause;
+  VoidCallback? _resume;
+  VoidCallback? _stopSpeaking;
+
+  void _bind({
+    required VoidCallback pause,
+    required VoidCallback resume,
+    required VoidCallback stopSpeaking,
+  }) {
+    _pause = pause;
+    _resume = resume;
+    _stopSpeaking = stopSpeaking;
+  }
+
+  void pause() => _pause?.call();
+  void resume() => _resume?.call();
+  void stopSpeaking() => _stopSpeaking?.call();
+}
+
 class CountdownScreen extends StatefulWidget {
   final TimerData timerData;
-  final int startingSet;
+  final VoidCallback? onBack;
+  final int startingSet = 1;
+  final CountdownController? controller;
   final bool tutorialMode;
   final VoidCallback? onTutorialNext;
 
@@ -17,6 +39,8 @@ class CountdownScreen extends StatefulWidget {
     this.startingSet = 1,
     this.tutorialMode = false,
     this.onTutorialNext,
+    this.onBack,
+    this.controller,
   });
 
   @override
@@ -43,12 +67,33 @@ class _CountdownScreenState extends State<CountdownScreen> {
     _currentSet = widget.startingSet;
     _currentSeconds =
         min(widget.timerData.workInterval * 60, widget.timerData.totalTime * 60);
+
+    widget.controller?._bind(
+      pause: _pauseTimer,
+      resume: _resumeTimer,
+      stopSpeaking: () {
+        _tts.stop();
+      },
+    );
     _initTtsAndStart();
+  }
+
+  @override
+  void didUpdateWidget(covariant CountdownScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      widget.controller?._bind(
+        pause: _pauseTimer,
+        resume: _resumeTimer,
+        stopSpeaking: () {
+          _tts.stop();
+        },
+      );
+    }
   }
 
   Future<void> _initTtsAndStart() async {
     await _initTts();
-    await Future.delayed(const Duration(milliseconds: 700));
     _startTimer();
   }
 
@@ -83,9 +128,19 @@ class _CountdownScreenState extends State<CountdownScreen> {
         'then break for $breakMin minutes, '
         'repeat for $sets sets.';
 
+    final messageSimple = 'Starting simple timer "$name". '
+        'for $workMin minutes, ';
+
     try {
-      await _tts.stop();
-      await _tts.speak(message);
+      await _tts.stop(); // Stop any ongoing speech first
+
+      // Simple timer case: when sets == null OR sets == 1 and break is null
+      if (sets == 1) {
+        await _tts.speak(messageSimple);
+      } else {
+        await _tts.speak(message);
+      }
+
     } catch (e) {
       debugPrint('TTS error: $e');
     }
@@ -116,7 +171,9 @@ class _CountdownScreenState extends State<CountdownScreen> {
       if (_elapsedTotalSeconds >= widget.timerData.totalTime * 60 ||
           _currentSet > widget.timerData.totalSets) {
         _timer.cancel();
-        Navigator.of(context).pop();
+        if (mounted) {
+          widget.onBack?.call();
+        }
         return;
       }
 
@@ -183,7 +240,12 @@ class _CountdownScreenState extends State<CountdownScreen> {
         elevation: 0,
         title: const Text('Active Timer', style: TextStyle(color: textColor)),
         centerTitle: true,
-        leading: const BackButton(color: textColor),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: textColor),
+          onPressed: () {
+            widget.onBack?.call();
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_none_outlined, color: textColor),
@@ -191,123 +253,138 @@ class _CountdownScreenState extends State<CountdownScreen> {
           ),
         ],
       ),
-
-      // ✅ Fixed: Use `child:` instead of `body:`
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Current Timer Card
-            Card(
-              elevation: 0,
-              color: cardBackground,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: cardBorder),
-              ),
-              child: ListTile(
-                title: const Text(
-                  'Current Timer',
-                  style: TextStyle(fontSize: 12, color: subtextColor),
-                ),
-                subtitle: Text(
-                  widget.timerData.name,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
+      // MODIFICATION 1: Wrap the body's content in a SingleChildScrollView
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              // "Current Timer" card
+              Card(
+                elevation: 0,
+                color: cardBackground,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: cardBorder)),
+                child: ListTile(
+                  title: const Text('Current Timer', style: TextStyle(fontSize: 12, color: subtextColor)),
+                  subtitle: Text(
+                    widget.timerData.name,
+                    style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: textColor),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-            // Timer Display
-            Card(
-              elevation: 0,
-              color: cardBackground,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: cardBorder),
+              // Main timer display card
+              Card(
+                elevation: 0,
+                color: cardBackground,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: cardBorder)),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 32.0),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Set $_currentSet of ${widget.timerData.totalSets}',
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: textColor.withOpacity(0.7)),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _formatTime(_currentSeconds),
+                        style: const TextStyle(
+                            fontSize: 80,
+                            fontWeight: FontWeight.bold,
+                            color: textColor),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(widget.timerData.totalTime)}',
+                        style: TextStyle(
+                            fontSize: 16,
+                            color: textColor.withOpacity(0.7)),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              child: Container(
+              const SizedBox(height: 24),
+
+              // Feedback controls card
+              Card(
+                elevation: 0,
+                color: cardBackground,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: cardBorder)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildFeedbackToggle(
+                        icon: Icons.volume_up_outlined,
+                        label: 'Audio Feedback',
+                        isOn: _audioFeedbackOn,
+                        onChanged: (value) {
+                          setState(() => _audioFeedbackOn = value);
+                        },
+                      ),
+                      _buildFeedbackToggle(
+                        icon: Icons.vibration_outlined,
+                        label: 'Haptic Feedback',
+                        isOn: _hapticFeedbackOn,
+                        onChanged: (value) {
+                          setState(() => _hapticFeedbackOn = value);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // MODIFICATION 2: Replace Spacer() with a SizedBox for consistent spacing
+              const SizedBox(height: 32),
+
+              // "Tap to Speak" button
+            /*
+              SizedBox(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 32.0),
-                child: Column(
-                  children: [
-                    Text(
-                      'Set $_currentSet of ${widget.timerData.totalSets}',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: textColor.withOpacity(0.7),
-                      ),
+                child: ElevatedButton.icon(
+                  onPressed: () {},
+                  icon: const Icon(Icons.mic, size: 24),
+                  label: const Text(
+                    'Tap to Speak',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: activeColor, // UPDATED: Dynamic color
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _formatTime(_currentSeconds),
-                      style: const TextStyle(
-                        fontSize: 80,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / '
-                          'Total: ${_formatTime(widget.timerData.totalTime * 60)}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: textColor.withOpacity(0.7),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-
-            // Feedback Controls
-            Card(
-              elevation: 0,
-              color: cardBackground,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: cardBorder),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildFeedbackToggle(
-                      icon: Icons.volume_up_outlined,
-                      label: 'Audio Feedback',
-                      isOn: _audioFeedbackOn,
-                      onChanged: (value) {
-                        setState(() => _audioFeedbackOn = value);
-                      },
-                    ),
-                    _buildFeedbackToggle(
-                      icon: Icons.vibration_outlined,
-                      label: 'Haptic Feedback',
-                      isOn: _hapticFeedbackOn,
-                      onChanged: (value) {
-                        setState(() => _hapticFeedbackOn = value);
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const Spacer(),
-            const SizedBox(height: 16),
-          ],
+              */
+              const SizedBox(height: 16), // Padding at the very bottom
+            ],
+          ),
         ),
       ),
     );
   }
-
+  // Helper widget for the feedback toggles
   Widget _buildFeedbackToggle({
     required IconData icon,
     required String label,
@@ -329,5 +406,22 @@ class _CountdownScreenState extends State<CountdownScreen> {
         ),
       ],
     );
+  }
+  void _pauseTimer() {
+    if (_isPaused) return;
+    setState(() {
+      _isPaused = true;
+    });
+    _timer.cancel();
+    _speak("Timer paused.");
+  }
+
+  void _resumeTimer() {
+    if (!_isPaused) return;
+    setState(() {
+      _isPaused = false;
+    });
+    _startTimer();
+    _speak("Resumed.");
   }
 }
