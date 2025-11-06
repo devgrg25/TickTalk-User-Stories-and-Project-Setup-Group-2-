@@ -3,10 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'homepage.dart';
-import 'create_timer_screen.dart';
-import 'stopwatchmodeselecter.dart';
-import 'stopwatch_normal_mode.dart';
 import 'MainPage.dart';
 
 class WelcomePage extends StatefulWidget {
@@ -40,7 +36,6 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybePlayWelcome());
   }
 
-  // --------------------- T T S --------------------- //
   Future<void> _initTts() async {
     try {
       await _tts.setLanguage('en-US');
@@ -48,7 +43,6 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
       await _tts.setPitch(1.0);
       await _tts.awaitSpeakCompletion(true);
     } catch (_) {}
-    _maybePlayWelcome();
   }
 
   Future<void> _maybePlayWelcome() async {
@@ -61,7 +55,6 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
     } catch (_) {}
   }
 
-  // ------------------ S P E E C H ------------------ //
   Future<void> _initSpeech() async {
     try {
       await _speech.initialize(
@@ -82,41 +75,29 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
   Future<void> _startListening() async {
     if (!await _speech.hasPermission && !(await _speech.initialize())) return;
     if (!mounted) return;
-
     setState(() => _listening = true);
 
     await _speech.listen(
       listenMode: stt.ListenMode.confirmation,
       partialResults: true,
       localeId: 'en_US',
-      onResult: (res) {
+      onResult: (res) async {
         if (!mounted) return;
         final words = res.recognizedWords.trim();
         if (words.isEmpty) return;
         setState(() => _lastHeard = words);
-        if (res.finalResult) _handle(words.toLowerCase()); // act only on final result
+        if (res.finalResult) await _handle(words.toLowerCase());
       },
     );
   }
 
   Future<void> _stopListening() async {
-    try {
-      await _speech.stop();
-    } catch (_) {}
+    try { await _speech.stop(); } catch (_) {}
     if (!mounted) return;
     setState(() => _listening = false);
   }
 
-  // ------------------ N A V I G A T I O N ------------------ //
-  Future<void> _goHome() async {
-    try {
-      await _speech.stop();
-      await _tts.stop();
-    } catch (_) {}
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const MainPage()),
-    );
+  Future<void> _setSeen() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hasSeenWelcome', true);
   }
@@ -130,83 +111,29 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
       return;
     }
 
-    // ✅ On "start" / "start tutorial": Create Timer → speak → Stopwatch selector → speak → Normal Mode → speak
-    if (has('start tutorial') || has('start the tutorial') || has('start')) {
-      try {
-        await _speech.stop();
-        await _tts.stop();
-      } catch (_) {}
-
+    if (has('skip') || has('continue')) {
+      await _speech.stop();
+      await _tts.stop();
       if (!mounted) return;
-
-      // 1) Go to Create Timer page immediately
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const CreateTimerScreen()),
+      await _setSeen();
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainPage()),
       );
-
-      // Speak *on* Create Timer page
-      const createGuide =
-          'This is the timer creation page '
-          'Here is a step by step guide on how to use it'
-          'One: enter a timer name, for example “study”. '
-          'Two: set work minutes, for example twenty five. '
-          'Three: set break minutes, for example five. '
-          'Four: set number of sets, for example four. '
-          'You can also say a single sentence like: '
-          'Start a study timer for four sets with twenty five minute work and five minute break.';
-      await Future.delayed(const Duration(milliseconds: 350));
-      try { await _tts.speak(createGuide); } catch (_) {}
-
-      // 2) Open Stopwatch Mode Selector
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const StopwatchModeSelector()),
-      );
-
-      // Speak *on* Stopwatch selector page
-      const selectorGuide =
-          'This is the stopwatch selector. '
-          'Choose Normal Mode for a single stopwatch with voice control, '
-          'or Player Mode to track up to six players at once.';
-      await Future.delayed(const Duration(milliseconds: 350));
-      try { await _tts.speak(selectorGuide); } catch (_) {}
-
-// 3) Open Normal Mode stopwatch
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const StopwatchNormalMode(autoStart: false)),
-      );
-
-// Speak *on* Normal Mode page (slower rate), then restore default
-      const normalGuide =
-          'This is Normal Mode. Say "start" to begin, "stop" to pause, "lap" to mark a lap, and "reset" to clear. '
-          'You can also use the buttons on screen.';
-
-      await Future.delayed(const Duration(milliseconds: 350)); // ensure page is shown
-      try {
-        await _tts.setSpeechRate(0.3);     // slower just for this page
-        await _tts.setPitch(1.0);
-        await _tts.awaitSpeakCompletion(true);
-        await _tts.speak(normalGuide);
-      } catch (_) {
-        // ignore TTS errors
-      } finally {
-        await _tts.setSpeechRate(0.50);     // restore your global rate
-      }
-
-      if (!mounted) return;
-
       return;
     }
 
-
-    if (has('skip') || has('continue')) {
-      await _goHome();
+    if (has('start tutorial') || has('start the tutorial') || has('start')) {
+      await _speech.stop();
+      await _tts.stop();
+      if (!mounted) return;
+      await _setSeen();
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainPage(tutorialMode: true)),
+      );
       return;
     }
   }
 
-  // Optional tactile feedback
   Future<void> _triggerFeedback() async {
     try {
       HapticFeedback.mediumImpact();
@@ -221,11 +148,9 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
     super.dispose();
   }
 
-  // -------------------- UI --------------------
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
@@ -235,19 +160,16 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
       body: SafeArea(
         child: Stack(
           children: [
-            // --------- Main content ---------
             ListView(
               padding: const EdgeInsets.fromLTRB(20, 28, 20, 140),
               children: [
                 const SizedBox(height: 8),
-                Text(
-                  'Your new favorite timer app.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                Text('Your new favorite timer app.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 18),
                 Text(
-                  'Say:  “start tutorial” , “skip”  , “repeat”\n\n'
+                  'Say: “start tutorial”, “skip”, “repeat”\n\n'
                       'Tap the blue bar below to speak, and tap again to stop.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context)
@@ -256,8 +178,6 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
                       ?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 30),
-
-                // Heard box
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
@@ -280,13 +200,11 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
                                     color: cs.onSurfaceVariant,
                                     fontWeight: FontWeight.w600)),
                             const SizedBox(height: 6),
-                            Text(
-                              _lastHeard.isEmpty ? '…' : _lastHeard,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
+                            Text(_lastHeard.isEmpty ? '…' : _lastHeard,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
@@ -296,7 +214,7 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
               ],
             ),
 
-            // --------- Bottom full-width mic bar (same as HomeScreen) ---------
+            // Global mic on welcome page
             Align(
               alignment: Alignment.bottomCenter,
               child: SafeArea(
@@ -317,17 +235,12 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
                     padding: const EdgeInsets.symmetric(vertical: 28),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _listening ? Icons.mic : Icons.mic_off,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 8),
+                      children: const [
+                        Icon(Icons.mic, color: Colors.white),
+                        SizedBox(width: 8),
                         Text(
-                          _listening
-                              ? "Listening... Tap to stop"
-                              : "Tap to Speak",
-                          style: const TextStyle(
+                          "Tap to Speak",
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
