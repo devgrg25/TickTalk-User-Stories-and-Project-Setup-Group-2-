@@ -269,7 +269,7 @@ class _MainPageState extends State<MainPage> {
         _speak("Time's up.");
 
         // Safely return to home after a short delay
-        Future.delayed(const Duration(milliseconds: 300), () {
+        Future.delayed(const Duration(milliseconds: 400), () {
           if (!mounted) return;
           setState(() {
             _activeTimer = null;

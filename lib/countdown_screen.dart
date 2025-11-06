@@ -128,7 +128,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
         'then break for $breakMin minutes, '
         'repeat for $sets sets.';
 
-    final messageSimple = 'Starting simple timer "$name"'
+    final messageSimple = 'Starting simple timer "$name". '
         'for $workMin minutes, ';
 
     try {
@@ -177,7 +177,9 @@ class _CountdownScreenState extends State<CountdownScreen> {
       if (_elapsedTotalSeconds >= widget.timerData.totalTime * 60 ||
           _currentSet > widget.timerData.totalSets) {
         _timer.cancel();
-        Navigator.of(context).pop();
+        if (mounted) {
+          widget.onBack?.call();
+        }
         return;
       }
 
