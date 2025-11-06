@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'stopwatch_normal_mode.dart';
 import 'stopwatch_player_mode.dart';
+import 'widgets/global_scaffold.dart'; // ✅ Add this import for global mic
 
 class StopwatchModeSelector extends StatelessWidget {
   const StopwatchModeSelector({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
+    return GlobalScaffold( // ✅ Use global mic wrapper instead of Scaffold
       appBar: AppBar(
         title: const Text('Stopwatch', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
       ),
-      body: Padding(
+      child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -142,7 +142,8 @@ class StopwatchModeSelector extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => StopwatchPlayerMode(playerCount: playerCount),
+                    builder: (_) =>
+                        StopwatchPlayerMode(playerCount: playerCount),
                   ),
                 );
               },

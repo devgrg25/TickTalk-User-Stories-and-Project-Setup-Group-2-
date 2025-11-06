@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_tts/flutter_tts.dart';
 
 class ParsedVoiceCommand {
   final String? name;
@@ -19,65 +20,79 @@ class ParsedVoiceCommand {
 }
 
 class VoiceController {
-  final FlutterTts _tts = FlutterTts();
   final stt.SpeechToText _speech = stt.SpeechToText();
+  final FlutterTts _tts = FlutterTts();
 
   bool _isInitialized = false;
-  bool _isListening = false;
-  bool _ttsReady = false;
+  bool get isInitialized => _isInitialized;
 
-  /// Initialize both TTS and Speech Recognition
+  bool _isListening = false;
+  bool get isListening => _isListening;
+
+  // Callback storage to handle status updates
+  VoidCallback? _onListeningComplete;
+
   Future<void> initialize() async {
     if (_isInitialized) return;
 
     try {
-      // Initialize TTS
-      await _tts.setLanguage('en-US');
+      // 1. Initialize TTS
+      await _tts.setLanguage("en-US");
+      await _tts.setSpeechRate(0.9); // Slightly faster than default for snappiness
       await _tts.setPitch(1.0);
       await _tts.setSpeechRate(0.9);
       await _tts.awaitSpeakCompletion(true);
       _ttsReady = true;
 
-      // Initialize Speech Recognition
-      await _speech.initialize(
-        onStatus: (status) {
-          debugPrint('🎙 Speech status: $status');
-        },
-        onError: (error) {
-          debugPrint('⚠️ Speech error: $error');
-        },
+      // 2. Initialize STT
+      // We initialize it here once to get permissions and readiness.
+      bool available = await _speech.initialize(
+        onError: (error) => debugPrint('STT Error: $error'),
+        onStatus: (status) => _onStatusChanged(status),
       );
 
-      _isInitialized = true;
-      debugPrint("✅ VoiceController initialized successfully");
+      _isInitialized = available;
+      debugPrint("VoiceController initialized: $_isInitialized");
     } catch (e) {
-      debugPrint('❌ VoiceController init error: $e');
+      debugPrint("VoiceController initialization failed: $e");
+      _isInitialized = false;
     }
   }
 
-  /// Speak any given text aloud using TTS
-  Future<void> speak(String text) async {
-    if (!_ttsReady) {
-      debugPrint('⚠️ TTS not ready yet.');
-      return;
+  void _onStatusChanged(String status) {
+    debugPrint('🎙 Speech status: $status');
+    if (status == 'notListening' || status == 'done') {
+      _isListening = false;
+      // If we have a completion callback waiting, fire it now.
+      if (_onListeningComplete != null) {
+        _onListeningComplete!();
+        _onListeningComplete = null; // Clear it after firing
+      }
+    } else if (status == 'listening') {
+      _isListening = true;
     }
+  }
 
+  Future<void> speak(String text) async {
+    if (text.isEmpty) return;
     try {
-      await _tts.stop(); // stop any previous speech
+      // Stop any current speech or listening before speaking new text
+      if (_isListening) await stopListening();
+      await _tts.stop();
       await _tts.speak(text);
     } catch (e) {
-      debugPrint('❌ TTS speak error: $e');
+      debugPrint("TTS Speak Error: $e");
     }
   }
 
-  /// Stop speech output
-  Future<void> stopSpeaking() async {
-    try {
-      await _tts.stop();
-    } catch (e) {
-      debugPrint('❌ TTS stop error: $e');
+  Future<void> listenAndRecognize({
+    required Function(String) onCommandRecognized,
+    VoidCallback? onComplete,
+  }) async {
+    if (!_isInitialized) {
+      debugPrint("Cannot listen: VoiceController not initialized.");
+      return;
     }
-  }
 
   int? parseNumber(String text) {
     const numberWords = {
@@ -118,46 +133,15 @@ class VoiceController {
     return null;
   }
 
-  /// Stop listening manually
   Future<void> stopListening() async {
-    if (!_isListening) return;
-    try {
+    if (_isListening) {
       await _speech.stop();
       _isListening = false;
-      debugPrint('🛑 Listening stopped.');
-    } catch (e) {
-      debugPrint('❌ Stop listening error: $e');
     }
   }
 
-  /// Cancel current recognition
-  Future<void> cancelListening() async {
-    try {
-      await _speech.cancel();
-      _isListening = false;
-    } catch (e) {
-      debugPrint('❌ Cancel listening error: $e');
-    }
-  }
-
-  /// Handle simple recognized commands
-  Future<void> _handleCommand(String recognized) async {
-    if (recognized.contains("repeat")) {
-      await speak("Repeating that again.");
-    } else if (recognized.contains("start stopwatch")) {
-      await speak("Starting stopwatch.");
-    } else if (recognized.contains("open settings")) {
-      await speak("Opening settings.");
-    } else if (recognized.contains("stop")) {
-      await speak("Okay, stopping now.");
-    } else {
-      debugPrint("No predefined command matched.");
-    }
-  }
-
-  /// Dispose resources
   void dispose() {
-    _speech.stop();
+    _speech.cancel();
     _tts.stop();
   }
   //------------------------------- Create Timer -------------------------------

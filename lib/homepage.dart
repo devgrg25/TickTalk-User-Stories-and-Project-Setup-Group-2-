@@ -6,12 +6,15 @@ import 'settings_page.dart';
 //import 'stopwatch_normal_mode.dart';
 //import 'create_timer_screen.dart';
 import 'timer_model.dart';
-//import 'countdown_screen.dart';
-import 'countdown_screenV.dart';
-//import 'stopwatchmodeselecter.dart';
+import 'countdown_screen.dart';
+import 'stopwatchmodeselecter.dart';
+
 import 'voice_controller.dart';
 import 'routine_timer_model.dart';
+import 'countdown_screenV.dart';
 import 'routines.dart';
+import 'routines_page.dart';
+import 'create_routine_page.dart';
 
 class HomeScreen extends StatefulWidget {
   final List<TimerData> timers;
@@ -45,10 +48,13 @@ class HomeScreenState extends State<HomeScreen> {
 
   //static const String _timersKey = 'saved_timers_list';
 
+  int _selectedIndex = 0;
+
   @override
   void initState() {
     super.initState();
     _initPage();
+
     _routines = PredefinedRoutines(
       stopListening: _stopListening,
       speak: _speak,
@@ -66,12 +72,16 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _speak(String text) async {
-    try {
-      await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(0.9);
-      await _tts.speak(text);
-    } catch (e) {
-      print("TTS error: $e");
+    if (_voiceController.isInitialized) {
+      await _voiceController.speak(text);
+    } else {
+      try {
+        await _tts.setLanguage('en-US');
+        await _tts.setSpeechRate(0.9);
+        await _tts.speak(text);
+      } catch (e) {
+        print("TTS error: $e");
+      }
     }
   }
 
@@ -86,10 +96,16 @@ class HomeScreenState extends State<HomeScreen> {
     final prefs = await SharedPreferences.getInstance();
     final String? timersString = prefs.getString(_timersKey);
     if (timersString != null) {
-      final List<dynamic> timerJson = jsonDecode(timersString);
-      setState(() {
-        _timers = timerJson.map((json) => TimerData.fromJson(json)).toList();
-      });
+      try {
+        final List<dynamic> timerJson = jsonDecode(timersString);
+        setState(() {
+          _timers = timerJson.map((json) => TimerData.fromJson(json)).toList();
+        });
+      } catch (e) {
+        print("Could not load original timers, format might be wrong: $e");
+        await prefs.remove(_timersKey);
+        _timers = [];
+      }
     }
   }
 
@@ -150,15 +166,6 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openNormalStopwatch({bool autoStart = false}) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => StopwatchNormalMode(autoStart: autoStart),
-      ),
-    );
-  }
-
   void _openStopwatchSelector() {
     Navigator.push(
       context,
@@ -167,21 +174,117 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startListening() async {
-    if (_isListening) return;
-    setState(() => _isListening = true);
-
-    await _voiceController.listenAndRecognize(onComplete: () {
-      if (mounted) {
-        setState(() => _isListening = false);
+    if (!_voiceController.isInitialized) {
+      await _voiceController.initialize();
+      if (!_voiceController.isInitialized) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Voice controller not ready. Please check permissions.')),
+        );
+        return;
       }
-    });
+    }
+    setState(() => _isListening = true);
+    await _voiceController.speak("Listening");
+
+    await _voiceController.listenAndRecognize(
+      onCommandRecognized: (String command) async {
+        if (!mounted) return;
+        _handleVoiceCommand(command);
+      },
+      onComplete: () {
+        if (mounted && _isListening) {
+          setState(() => _isListening = false);
+        }
+      },
+    );
   }
  */
   Future<void> _stopListening() async {
+    if (!mounted || !_isListening) return;
     setState(() => _isListening = false);
     await _voiceController.stopListening();
   }
 
+  void _handleVoiceCommand(String command) async {
+    final normalized = command.toLowerCase().trim();
+    debugPrint("Homepage Recognized: $normalized");
+
+    if (normalized.startsWith('hey tick talk')) {
+      String routineCmd = normalized.replaceFirst('hey tick talk', '').trim();
+      bool routineMatched = true;
+
+      if (routineCmd.contains('mindfulness')) {
+        _routines.startMindfulnessMinute();
+      } else if (routineCmd.contains('laundry')) {
+        _routines.startSimpleLaundryCycle();
+      } else if (routineCmd.contains('20 20 20')) {
+        _routines.start202020Rule();
+      } else if (routineCmd.contains('pomodoro') || routineCmd.contains('focus')) {
+        _routines.startPomodoroTimer();
+      } else if (routineCmd.contains('exercise') || routineCmd.contains('workout')) {
+        _routines.startExerciseTimer();
+      } else if (routineCmd.contains('morning')) {
+        _routines.startMorningIndependence();
+      } else if (routineCmd.contains('recipe')) {
+        _routines.startRecipePrep();
+      } else {
+        routineMatched = false;
+        _speak("Sorry, I heard 'Hey Tick Talk' but didn't recognize that routine.");
+      }
+      if (routineMatched) return;
+    }
+
+    if (normalized.contains('create timer') ||
+        normalized.contains('new timer') ||
+        normalized == 'timer') {
+      await _speak("Opening timer creation screen.");
+      _openCreateTimerScreen();
+    } else if (normalized.contains('start stopwatch') ||
+        normalized.contains('open stopwatch') ||
+        normalized == 'stopwatch') {
+      await _speak("Opening stopwatch.");
+      _openStopwatchSelector();
+    } else if (normalized.contains('open settings') ||
+        normalized == 'settings') {
+      await _speak("Opening settings.");
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const SettingsPage()),
+      );
+    } else {
+      if (!normalized.startsWith('hey tick talk')) {
+        await _speak("Sorry, I didn't understand that command.");
+      }
+    }
+  }
+
+  void _onItemTapped(int index) {
+    switch (index) {
+      case 0: // Home
+        setState(() => _selectedIndex = 0);
+        break;
+      case 1: // Create
+        _openCreateTimerScreen();
+        break;
+      case 2: // Routines
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RoutinesPage(
+              routines: _routines,
+              voiceController: _voiceController,
+            ),
+          ),
+        );
+        break;
+      case 3: // Activity
+        setState(() => _selectedIndex = 3);
+        break;
+      case 4: // Stopwatch
+        _openStopwatchSelector();
+        break;
+    }
+  }
 
   @override
   void dispose() {
@@ -193,38 +296,18 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      resizeToAvoidBottomInset: false,
+      backgroundColor: const Color(0xFFF2F6FA),
       appBar: AppBar(
+        title: const Text('TickTalk', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text('TickTalk', style: TextStyle(color: Color(0xFF007BFF), fontWeight: FontWeight.bold, fontSize: 30)),
         actions: [
           IconButton(
-              icon: const Icon(Icons.notifications_none, color: Colors.black),
-              onPressed: () {}),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.black),
-            onSelected: (String result) {
-              if (result == 'settings') {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const SettingsPage()));
-              }
+            icon: const Icon(Icons.settings_outlined, color: Colors.black),
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsPage()));
             },
-            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-              const PopupMenuItem<String>(
-                value: 'settings',
-                child: Row(
-                  children: [
-                    Icon(Icons.settings_outlined),
-                    SizedBox(width: 10),
-                    Text("Settings"),
-                  ],
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -407,26 +490,40 @@ class RoutineCard extends StatelessWidget {
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis),
           ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: onPressed ?? () {},
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Start Routine', style: TextStyle(fontSize: 14)),
-                Icon(Icons.arrow_right_alt, size: 18),
-              ],
-            ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.add_circle_outline),
+            label: 'Create',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list_alt),
+            label: 'Routines',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart),
+            label: 'Activity',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.timer),
+            label: 'Stopwatch',
           ),
         ],
+      ),
+      bottomSheet: SafeArea(
+        child: GestureDetector(
+          onTap: _isListening ? _stopListening : _startListening,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            color: _isListening ? Colors.redAccent : const Color(0xFF007BFF),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Icon(_isListening ? Icons.mic : Icons.mic_none, color: Colors.white, size: 28),
+          ),
+        ),
       ),
     );
   }
 }
 
-// ---------------------------------------------
-// TimerCard
-// ---------------------------------------------
 class TimerCard extends StatelessWidget {
   final String title;
   final String status;
@@ -453,9 +550,15 @@ class TimerCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -470,26 +573,40 @@ class TimerCard extends StatelessWidget {
                 color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(status,
-                  style: TextStyle(color: color, fontWeight: FontWeight.w600)),
-            ),
-          ]),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  status,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           Text('Feedback: $feedback',
-              style: const TextStyle(fontSize: 14, color: Colors.black54)),
-          const SizedBox(height: 12),
-          Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            IconButton(
+              style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
                 onPressed: onPlay,
-                icon: const Icon(Icons.play_arrow, color: Colors.black54)),
-            IconButton(
+                icon: const Icon(Icons.play_circle_fill, color: Color(0xFF007BFF), size: 32),
+              ),
+              IconButton(
                 onPressed: onEdit,
-                icon: const Icon(Icons.edit_outlined, color: Colors.black54)),
-            IconButton(
+                icon: Icon(Icons.edit, color: Colors.grey[600]),
+              ),
+              IconButton(
                 onPressed: onDelete,
-                icon:
-                const Icon(Icons.delete_outline, color: Colors.redAccent)),
-          ]),
+                icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+              ),
+            ],
+          ),
         ],
       ),
     );
