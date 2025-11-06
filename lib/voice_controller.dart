@@ -34,7 +34,8 @@ class VoiceController {
       // Initialize TTS
       await _tts.setLanguage('en-US');
       await _tts.setPitch(1.0);
-      await _tts.setSpeechRate(0.5);
+      await _tts.setSpeechRate(0.9);
+      await _tts.awaitSpeakCompletion(true);
       _ttsReady = true;
 
       // Initialize Speech Recognition

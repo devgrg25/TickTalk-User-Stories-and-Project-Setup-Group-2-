@@ -339,7 +339,7 @@ class _MainPageState extends State<MainPage> {
         if (!mounted) return;
         setState(() => _isListening = false);
 
-        _voiceController.speak("Creating timer.");
+        await _voiceController.speak("Creating timer.");
 
         final work = data.workMinutes ?? data.simpleTimerMinutes ?? 0;
         final sets = data.sets ?? 1;
