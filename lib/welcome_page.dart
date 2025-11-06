@@ -7,19 +7,15 @@ import 'MainPage.dart';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
-
   @override
   State<WelcomePage> createState() => _WelcomePageState();
 }
 
 class _WelcomePageState extends State<WelcomePage> {
-  // ---- TTS ----
   final FlutterTts _tts = FlutterTts();
-  bool _hasPlayedWelcome = false;
-
-  // ---- Speech ----
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _listening = false;
+  bool _hasPlayedWelcome = false;
   String _lastHeard = '…';
 
   final String _welcomeText = '''
@@ -58,16 +54,8 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
   Future<void> _initSpeech() async {
     try {
       await _speech.initialize(
-        onStatus: (s) {
-          if (!mounted) return;
-          if (s == 'done' || s == 'notListening') {
-            setState(() => _listening = false);
-          }
-        },
-        onError: (_) {
-          if (!mounted) return;
-          setState(() => _listening = false);
-        },
+        onStatus: (_) => setState(() => _listening = _speech.isListening),
+        onError: (_) => setState(() => _listening = false),
       );
     } catch (_) {}
   }
@@ -76,7 +64,6 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
     if (!await _speech.hasPermission && !(await _speech.initialize())) return;
     if (!mounted) return;
     setState(() => _listening = true);
-
     await _speech.listen(
       listenMode: stt.ListenMode.confirmation,
       partialResults: true,
@@ -110,7 +97,6 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
       await _tts.speak(_welcomeText);
       return;
     }
-
     if (has('skip') || has('continue')) {
       await _speech.stop();
       await _tts.stop();
@@ -121,7 +107,6 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
       );
       return;
     }
-
     if (has('start tutorial') || has('start the tutorial') || has('start')) {
       await _speech.stop();
       await _tts.stop();
@@ -150,109 +135,113 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: AppBar(
-        title: const Text('Welcome to TickTalk!'),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            ListView(
-              padding: const EdgeInsets.fromLTRB(20, 28, 20, 140),
-              children: [
-                const SizedBox(height: 8),
-                Text('Your new favorite timer app.',
+    // ❗ Opt out from global scaling here
+    final fixed = MediaQuery.of(context).copyWith(textScaleFactor: 1.0);
+    return MediaQuery(
+      data: fixed,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          title: const Text('Welcome to TickTalk!'),
+          centerTitle: true,
+        ),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              ListView(
+                padding: const EdgeInsets.fromLTRB(20, 28, 20, 140),
+                children: [
+                  const SizedBox(height: 8),
+                  Text('Your new favorite timer app.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Say:  “start tutorial” , “skip”  , “repeat”\n\n'
+                        'Tap the blue bar below to speak, and tap again to stop.',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 18),
-                Text(
-                  'Say: “start tutorial”, “skip”, “repeat”\n\n'
-                      'Tap the blue bar below to speak, and tap again to stop.',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyLarge
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 30),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.black12),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyLarge
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.hearing, color: cs.primary),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Last heard:',
-                                style: TextStyle(
-                                    color: cs.onSurfaceVariant,
-                                    fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 6),
-                            Text(_lastHeard.isEmpty ? '…' : _lastHeard,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            // Global mic on welcome page
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: SafeArea(
-                child: GestureDetector(
-                  onTap: () async {
-                    await _triggerFeedback();
-                    if (_listening) {
-                      await _stopListening();
-                    } else {
-                      await _tts.stop();
-                      await _startListening();
-                    }
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    color: _listening ? Colors.redAccent : const Color(0xFF007BFF),
+                  const SizedBox(height: 30),
+                  Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 28),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.black12),
+                    ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.mic, color: Colors.white),
-                        SizedBox(width: 8),
-                        Text(
-                          "Tap to Speak",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.hearing, color: Color(0xFF007BFF)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Last heard:',
+                                  style: TextStyle(
+                                      color: Colors.black54,
+                                      fontWeight: FontWeight.w600)),
+                              const SizedBox(height: 6),
+                              Text(_lastHeard.isEmpty ? '…' : _lastHeard,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600)),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
+                ],
+              ),
+
+              // bottom mic
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: SafeArea(
+                  child: GestureDetector(
+                    onTap: () async {
+                      await _triggerFeedback();
+                      if (_listening) {
+                        await _stopListening();
+                      } else {
+                        await _tts.stop();
+                        await _startListening();
+                      }
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      color: _listening ? Colors.redAccent : const Color(0xFF007BFF),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 28),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.mic, color: Colors.white),
+                          SizedBox(width: 8),
+                          Text(
+                            "Tap to Speak",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

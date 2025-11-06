@@ -16,6 +16,9 @@ import 'routine_timer_model.dart';
 import 'routines.dart';
 import 'routines_page.dart';
 
+// ✅ NEW: global text scale controller
+import 'font_scale.dart';
+
 class MainPage extends StatefulWidget {
   final bool tutorialMode; // <— NEW
   const MainPage({super.key, this.tutorialMode = false});
@@ -291,6 +294,22 @@ class _MainPageState extends State<MainPage> {
     try { await _tts.speak(text); } catch (e) { debugPrint("TTS error: $e"); }
   }
 
+  // --------- NEW: global font commands helper ----------
+  Future<bool> _handleGlobalFontCommands(String words) async {
+    final w = words.toLowerCase();
+    if (w.contains('increase font') || w.contains('increase text') || w.contains('bigger text')) {
+      await FontScale.instance.increase10();
+      await _voiceController.speak('Increased font size by five percent.');
+      return true;
+    }
+    if (w.contains('decrease font') || w.contains('decrease text') || w.contains('smaller text')) {
+      await FontScale.instance.decrease10();
+      await _voiceController.speak('Decreased font size by ten percent.');
+      return true;
+    }
+    return false;
+  }
+
   // ---------------------- Voice ----------------------
   Future<void> _startListening() async {
     await _tts.stop();
@@ -298,11 +317,16 @@ class _MainPageState extends State<MainPage> {
     if (_isListening) return;
     setState(() => _isListening = true);
 
-    // While tutorial is active: ONLY listen for "skip" (or similar)
+    // While tutorial is active: ONLY listen for "skip" (or similar) or font commands
     if (_tutorialActive) {
       await _voiceController.startListeningForControl(
         onCommand: (cmd) async {
           if (!mounted) return;
+          // font first
+          if (await _handleGlobalFontCommands(cmd)) {
+            setState(() => _isListening = false);
+            return;
+          }
           setState(() => _isListening = false);
           final w = cmd.toLowerCase();
           if (w.contains('skip') || w.contains('exit') || w.contains('stop tutorial') || w.contains('cancel')) {
@@ -315,13 +339,19 @@ class _MainPageState extends State<MainPage> {
       return;
     }
 
-    // Normal behavior
+    // If a timer is active → control commands (plus font)
     if (_activeTimer != null) {
       await _voiceController.startListeningForControl(
         onCommand: (cmd) async {
           if (!mounted) return;
-          setState(() => _isListening = false);
 
+          // handle font globally
+          if (await _handleGlobalFontCommands(cmd)) {
+            setState(() => _isListening = false);
+            return;
+          }
+
+          setState(() => _isListening = false);
           final words = cmd.toLowerCase();
           if (words.contains("pause") || words.contains("hold")) {
             _countdownController.pause();
@@ -339,36 +369,50 @@ class _MainPageState extends State<MainPage> {
       return;
     }
 
-    await _voiceController.startListeningForTimer(
-      onCommand: (ParsedVoiceCommand data) async {
-        await _voiceController.stopListening();
+    // No active timer → first check for font commands, else fall back to your timer-creation grammar
+    await _voiceController.startListeningForControl(
+      onCommand: (cmd) async {
         if (!mounted) return;
-        setState(() => _isListening = false);
 
-        await _voiceController.speak("Creating timer.");
+        // font globally
+        if (await _handleGlobalFontCommands(cmd)) {
+          setState(() => _isListening = false);
+          return;
+        }
 
-        final work = data.workMinutes ?? data.simpleTimerMinutes ?? 0;
-        final sets = data.sets ?? 1;
-        final breaks = data.breakMinutes ?? 0;
-        final totalTime = ((work * sets) + (breaks * (sets - 1))) * 60;
+        // Not a font command → run your existing timer-creation pass
+        await _voiceController.startListeningForTimer(
+          onCommand: (ParsedVoiceCommand data) async {
+            await _voiceController.stopListening();
+            if (!mounted) return;
+            setState(() => _isListening = false);
 
-        final timerData = TimerData(
-          id: DateTime.now().toIso8601String(),
-          name: (data.name?.trim().isNotEmpty ?? false)
-              ? data.name!
-              : _generateUniqueTimerName(_timers),
-          workInterval: work,
-          breakInterval: breaks,
-          totalSets: sets,
-          totalTime: totalTime,
-          currentSet: 1,
+            await _voiceController.speak("Creating timer.");
+
+            final work = data.workMinutes ?? data.simpleTimerMinutes ?? 0;
+            final sets = data.sets ?? 1;
+            final breaks = data.breakMinutes ?? 0;
+            final totalTime = ((work * sets) + (breaks * (sets - 1))) * 60;
+
+            final timerData = TimerData(
+              id: DateTime.now().toIso8601String(),
+              name: (data.name?.trim().isNotEmpty ?? false)
+                  ? data.name!
+                  : _generateUniqueTimerName(_timers),
+              workInterval: work,
+              breakInterval: breaks,
+              totalSets: sets,
+              totalTime: totalTime,
+              currentSet: 1,
+            );
+
+            if (!mounted) return;
+            setState(() {
+              _voiceFilledTimer = timerData;
+              _tabIndex = 1;
+            });
+          },
         );
-
-        if (!mounted) return;
-        setState(() {
-          _voiceFilledTimer = timerData;
-          _tabIndex = 1;
-        });
       },
     );
   }
