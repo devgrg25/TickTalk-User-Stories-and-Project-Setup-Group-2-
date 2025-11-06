@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'countdown_screen.dart';
 import 'timer_model.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -10,32 +11,37 @@ class CreateTimerScreen extends StatefulWidget {
 
   const CreateTimerScreen({super.key, this.existingTimer, this.onSaveTimer});
 
+
   @override
   State<CreateTimerScreen> createState() => _CreateTimerScreenState();
 }
 
 class _CreateTimerScreenState extends State<CreateTimerScreen> {
   final _nameController = TextEditingController();
+  late FlutterTts _tts;
+  // REMOVED: No longer need a controller for total time.
+  // final _totalTimeController = TextEditingController();
   final _workIntervalController = TextEditingController();
   final _breakIntervalController = TextEditingController();
   final _setsController = TextEditingController();
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _isListening = false;
+  String _lastHeard = "Tap the mic and speak a command...";
 
-  late FlutterTts _tts;
-
+  // Check if we are in "edit" mode
   bool get _isEditing => widget.existingTimer != null;
 
   @override
   void initState() {
     super.initState();
+    _speech.initialize();
     _tts = FlutterTts();
     _initTts();
-
+    // If we are editing, pre-fill the form fields
     if (_isEditing) {
       _nameController.text = widget.existingTimer!.name;
-      _workIntervalController.text =
-          widget.existingTimer!.workInterval.toString();
-      _breakIntervalController.text =
-          widget.existingTimer!.breakInterval.toString();
+      _workIntervalController.text = widget.existingTimer!.workInterval.toString();
+      _breakIntervalController.text = widget.existingTimer!.breakInterval.toString();
       _setsController.text = widget.existingTimer!.totalSets.toString();
     }
   }
@@ -52,10 +58,14 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    // REMOVED: Dispose the controller that was removed.
+    // _totalTimeController.dispose();
     _workIntervalController.dispose();
     _breakIntervalController.dispose();
     _setsController.dispose();
-    _tts.stop();
+    _tts.stop(); // stop any ongoing speech
+    _speech.stop();
+
     super.dispose();
   }
 
@@ -161,26 +171,41 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
   // UPDATED: Core logic for starting the timer is changed here.
   void startCountdown({int? simpleTimerMinutes}) {
 
+    int workTime;
+    int breakTime;
+    int totalSets;
+
+    // 1. Get values and provide defaults for optional fields.
+    if (simpleTimerMinutes != null) {
+      // --- Simple timer mode ---
+      workTime = simpleTimerMinutes;
+      breakTime = 0;
+      totalSets = 1;
+    } else {
+        workTime = int.tryParse(_workIntervalController.text) ?? 0;
+        breakTime = int.tryParse(_breakIntervalController.text) ?? 5; // Default break is 5 mins
+        totalSets = int.tryParse(_setsController.text) ?? 0;
+    }
+
+
+    // 2. Validate essential inputs.
     if (workTime <= 0 || totalSets <= 0) {
-      _showMessage('Please provide valid work time and sets.');
+      _showMessage('Please provide a valid time or number of sets.');
       return;
     }
 
-    final totalTime =
-        (workTime * totalSets) + (breakTime * (totalSets - 1));
     // 3. Calculate the total time automatically.
     // Total Time = (Work Time * Number of Sets) + (Break Time * (Number of Sets - 1))
     // The (sets - 1) ensures no break time is added after the final set.
     final calculatedTotalTime = ((workTime * totalSets) + (breakTime * (totalSets - 1)))*60;
 
+    // 4. Create the TimerData object.
     final timerData = TimerData(
-      id: _isEditing
-          ? widget.existingTimer!.id
-          : DateTime.now().toIso8601String(),
+      id: _isEditing ? widget.existingTimer!.id : DateTime.now().toIso8601String(),
       name: _nameController.text.isNotEmpty
           ? _nameController.text
-          : 'My Timer',
-      totalTime: totalTime,
+          : (simpleTimerMinutes != null ? 'Quick Timer' : 'My Timer'),
+      totalTime: calculatedTotalTime, // Use the calculated time
       workInterval: workTime,
       breakInterval: breakTime,
       totalSets: totalSets,
@@ -197,86 +222,90 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     /*Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CountdownScreen(timerData: timerData),
+        builder: (context) => CountdownScreen(timerData: timerData),
       ),
     );*/
   }
 
+  // --- UI BUILDERS ---
   @override
   Widget build(BuildContext context) {
-    const Color primaryBlue = Color(0xFF007BFF);
-
-    return GlobalScaffold(
+    return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          'Create New Timer',
-          style: TextStyle(color: Colors.black),
-        ),
+        title: const Text('Create New Timer', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
       ),
+      body: _buildFormUI(),
+    );
+  }
 
-      // ✅ FIXED: use child instead of body
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildSectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Timer Details',
-                    style:
-                    TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
+  Widget _buildFormUI() {
+    const Color primaryBlue = Color(0xFF007BFF);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildSectionCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Timer Details',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
                     controller: _nameController,
                     label: 'Timer Name',
                     icon: Icons.label_outline,
-                    hint: 'e.g., Morning Workout',
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
+                    hint: 'e.g., Morning Workout'),
+                const SizedBox(height: 16),
+                // REMOVED: The text field for Total Time is gone from the UI.
+                _buildTextField(
                     controller: _workIntervalController,
                     label: 'Work Interval (minutes)',
                     icon: Icons.fitness_center_outlined,
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
+                    keyboardType: TextInputType.number),
+                const SizedBox(height: 16),
+                _buildTextField(
                     controller: _breakIntervalController,
                     label: 'Break Interval (minutes)',
                     icon: Icons.pause_circle_outline,
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildTextField(
+                    keyboardType: TextInputType.number),
+                const SizedBox(height: 16),
+                _buildTextField(
                     controller: _setsController,
                     label: 'Number of Sets',
                     icon: Icons.repeat,
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
-              ),
+                    keyboardType: TextInputType.number),
+              ],
             ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: _startCountdown,
-              icon: const Icon(Icons.timer_outlined, size: 22),
-              label: const Text(
-                'Save and Start Timer',
-                style:
-                TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryBlue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          ),
+          const SizedBox(height: 20),
+          _buildSectionCard(
+            // ... (The voice command card remains the same)
+            child: Column(
+              children: [
+                const Text(
+                  'Or Use a Voice Command',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '"Start a study timer for 4 sets with 25 minute work and 5 minute break."',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic),
+                ),
+                const SizedBox(height: 16),
+                FloatingActionButton(
+                  onPressed: _listen,
+                  backgroundColor: primaryBlue,
+                  child: Icon(_isListening ? Icons.mic : Icons.mic_off,
+                      color: Colors.white),
                 ),
                 const SizedBox(height: 8),
                 Text(_isListening ? "Listening..." : _lastHeard,
@@ -300,14 +329,14 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            const SizedBox(height: 20),
-            // 👇 Mic handled globally
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
+  // --- HELPER WIDGETS ---
+  // The helper widgets _buildSectionCard and _buildTextField remain unchanged.
   Widget _buildSectionCard({required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -328,24 +357,28 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     TextInputType keyboardType = TextInputType.text,
   }) {
     const Color primaryBlue = Color(0xFF007BFF);
+
     return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: Colors.grey[600]),
-        labelText: label,
-        hintText: hint,
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12.0),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: const OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12.0)),
-          borderSide: BorderSide(color: primaryBlue, width: 2.0),
-        ),
-      ),
-    );
+        controller: controller,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          prefixIcon: Icon(icon, color: Colors.grey[600]),
+          labelText: label,
+          hintText: hint,
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.0),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.0),
+            borderSide: BorderSide(color: Colors.grey.shade300),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12.0),
+            borderSide: const BorderSide(color: primaryBlue, width: 2.0),
+          ),
+        ));
   }
 }

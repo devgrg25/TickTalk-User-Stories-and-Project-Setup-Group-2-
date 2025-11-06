@@ -1,9 +1,9 @@
+// countdown_screen.dart
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'timer_model.dart';
-import 'widgets/global_scaffold.dart'; // ✅ Import global mic wrapper
+import 'timer_model.dart'; // To access the TimerData class
 
 class CountdownController {
   VoidCallback? _pause;
@@ -36,7 +36,6 @@ class CountdownScreen extends StatefulWidget {
   const CountdownScreen({
     super.key,
     required this.timerData,
-    this.startingSet = 1,
     this.tutorialMode = false,
     this.onTutorialNext,
     this.onBack,
@@ -63,6 +62,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
   void initState() {
     super.initState();
     _tts = FlutterTts();
+    //_initTts();
     _currentPhase = 'Work';
     _currentSet = widget.startingSet;
     _currentSeconds =
@@ -104,7 +104,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
       await _tts.setSpeechRate(0.5);
       await _tts.awaitSpeakCompletion(true);
     } catch (_) {
-      debugPrint("TTS initialization failed");
+      print("TTS initialization failed");
     }
   }
 
@@ -116,7 +116,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
   }
 
   Future<void> _speakTimerDetails() async {
-    if (!_audioFeedbackOn) return;
+    if (!_audioFeedbackOn) return; // Only speak if audio feedback is on
 
     final workMin = widget.timerData.workInterval;
     final breakMin = widget.timerData.breakInterval;
@@ -147,20 +147,26 @@ class _CountdownScreenState extends State<CountdownScreen> {
   }
 
   Future<void> _speak(String message) async {
-    if (!_audioFeedbackOn) return;
+    if (!_audioFeedbackOn) return; // Respect user toggle
     try {
       await _tts.stop();
       await _tts.speak(message);
-    } catch (_) {}
+    } catch (e) {
+      // Handle error if needed
+    }
   }
 
+
   void _startTimer() {
+    // Speak at the start of each phase
     if (_audioFeedbackOn) {
       if (_currentPhase == 'Work' && _currentSet == 1) {
         _speakTimerDetails();
-      } else if (_currentPhase == 'Work' && _currentSet != 1) {
+      }
+      else if (_currentPhase == 'Work' && _currentSet != 1) {
         _speak("Set $_currentSet: Work for ${widget.timerData.workInterval} minutes.");
-      } else {
+      }
+      else {
         _speak("Time for a break of ${widget.timerData.breakInterval} minutes.");
       }
     }
@@ -184,6 +190,7 @@ class _CountdownScreenState extends State<CountdownScreen> {
             _currentSeconds--;
           } else {
             _timer.cancel();
+            // Speak a short voice note at the end of the phase
             if (_audioFeedbackOn) {
               if (_currentPhase == 'Work') {
                 _speak("Work session completed. Take a short break.");
@@ -199,9 +206,13 @@ class _CountdownScreenState extends State<CountdownScreen> {
     });
   }
 
+
   void _togglePhase() {
+    //bool finishedSet = false;
+
     if (_currentPhase == 'Break') {
       _currentSet++;
+      //finishedSet = true;
       if (_currentSet > widget.timerData.totalSets) {
         return;
       }
@@ -217,6 +228,10 @@ class _CountdownScreenState extends State<CountdownScreen> {
         (widget.timerData.totalTime * 60) - _elapsedTotalSeconds;
 
     _currentSeconds = min(nextPhaseDuration, remainingTotalTime);
+
+    //if (finishedSet) {
+    //  _speak("Great job! You've completed set ${_currentSet - 1}.");
+    //}
   }
 
   String _formatTime(int totalSeconds) {
@@ -227,14 +242,20 @@ class _CountdownScreenState extends State<CountdownScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // --- COLOR PALETTE FROM HomeScreen ---
     const Color primaryBlue = Color(0xFF007BFF);
-    const Color breakGreen = Colors.green;
+    const Color breakGreen = Colors.green; // Same as 'Completed' status
     const Color cardBackground = Color(0xFFF9FAFB);
-    const Color cardBorder = Color(0xFFE5E7EB);
+    const Color cardBorder = Color(0xFFE5E7EB); // Equivalent to grey.shade300
+    const Color inactiveGrey = Colors.grey;
     const Color textColor = Colors.black;
     const Color subtextColor = Colors.black54;
 
-    return GlobalScaffold(
+    // Determine the active color based on the current phase
+    final Color activeColor = _currentPhase == 'Work' ? primaryBlue : breakGreen;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -391,12 +412,16 @@ class _CountdownScreenState extends State<CountdownScreen> {
     required bool isOn,
     required ValueChanged<bool> onChanged,
   }) {
+    // UPDATED: Using the color palette from HomeScreen
     const Color primaryBlue = Color(0xFF007BFF);
     const Color inactiveGrey = Colors.grey;
 
     return Column(
       children: [
-        Icon(icon, color: isOn ? primaryBlue : inactiveGrey),
+        Icon(
+          icon,
+          color: isOn ? primaryBlue : inactiveGrey,
+        ),
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
         Switch(
           value: isOn,
