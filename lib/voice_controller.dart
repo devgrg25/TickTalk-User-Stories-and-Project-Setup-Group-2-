@@ -217,6 +217,21 @@ class VoiceController {
       ),
     );
   }
+
+  Future<void> startListeningForControl({
+    required void Function(String command) onCommand,
+  }) async {
+    await initialize();
+    await _speech.listen(
+      listenFor: const Duration(seconds: 5),
+      onResult: (result) {
+        if (result.finalResult) {
+          final words = result.recognizedWords.toLowerCase();
+          onCommand(words);
+        }
+      },
+    );
+  }
 }
 
 

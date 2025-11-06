@@ -66,6 +66,48 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
+  void _pauseTimer() {
+    if (_ticker == null) return;
+    _ticker!.cancel();
+    _ticker = null;
+    _speak("Timer paused.");
+  }
+
+  void _resumeTimer() {
+    if (_activeTimer == null || _ticker != null) return;
+
+    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      final current = _activeTimer!;
+      final remaining = current.totalTime;
+
+      if (remaining <= 0) {
+        _stopTimer();
+        return;
+      }
+
+      setState(() {
+        _activeTimer = current.copyWith(totalTime: remaining - 1);
+      });
+    });
+
+    _speak("Resuming timer.");
+  }
+
+  void _stopTimer() {
+    _ticker?.cancel();
+    _ticker = null;
+
+    if (!mounted) return;
+    setState(() {
+      _activeTimer = null;
+      _showingCountdown = false;
+    });
+
+    _speak("Timer stopped.");
+  }
+
+
   String _generateUniqueTimerName(List<TimerData> timers) {
     int counter = 1;
 
@@ -243,15 +285,6 @@ class _MainPageState extends State<MainPage> {
     });
   }
 
-  void _stopTimer() {
-    _ticker?.cancel();
-    if (!mounted) return;
-    setState(() {
-      _activeTimer = null;
-      _showingCountdown = false;
-    });
-  }
-
   // Called when Create page saves a timer
   void _handleSaveTimer(TimerData timer) {
     _addOrUpdateTimer(timer);
@@ -268,22 +301,43 @@ class _MainPageState extends State<MainPage> {
   // ---------- VOICE ----------
   Future<void> _startListening() async {
     if (_isListening) return;
-
     setState(() => _isListening = true);
 
+    // CASE 1: There is an active timer → listen for pause/resume/stop
+    if (_activeTimer != null) {
+      await _voiceController.startListeningForControl(
+        onCommand: (cmd) async {
+          setState(() => _isListening = false);
+
+          final words = cmd.toLowerCase();
+
+          if (words.contains("pause") || words.contains("hold")) {
+            _pauseTimer();
+          } else if (words.contains("resume") || words.contains("continue")) {
+            _resumeTimer();
+          } else if (words.contains("stop") || words.contains("end")) {
+            _stopTimer();
+          } else {
+            _voiceController.speak("Command not recognized while timer is running.");
+          }
+        },
+      );
+      return;
+    }
+
+    // CASE 2: No timer active → treat as timer creation command
     await _voiceController.startListeningForTimer(
       onCommand: (ParsedVoiceCommand data) async {
-        // stop listening before UI changes
         await _voiceController.stopListening();
         if (!mounted) return;
         setState(() => _isListening = false);
 
-        _voiceController.speak("Opening create timer screen.");
+        _voiceController.speak("Creating timer.");
 
         final work = data.workMinutes ?? data.simpleTimerMinutes ?? 0;
         final sets = data.sets ?? 1;
         final breaks = data.breakMinutes ?? 0;
-        final totalTime = ((work * sets) + (breaks * (sets - 1)))*60;
+        final totalTime = ((work * sets) + (breaks * (sets - 1))) * 60;
 
         final timerData = TimerData(
           id: DateTime.now().toIso8601String(),
@@ -300,7 +354,7 @@ class _MainPageState extends State<MainPage> {
         if (!mounted) return;
         setState(() {
           _voiceFilledTimer = timerData;
-          _tabIndex = 1; // switch to Create tab with prefill
+          _tabIndex = 1; // switch to Create screen
         });
       },
     );
