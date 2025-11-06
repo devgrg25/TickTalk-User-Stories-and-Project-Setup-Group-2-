@@ -260,13 +260,13 @@ class _CountdownScreenState extends State<CountdownScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text('Active Timer', style: TextStyle(color: textColor)),
-        centerTitle: true,
-        leading: IconButton(
+        //centerTitle: true,
+        /*leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: textColor),
           onPressed: () {
             widget.onBack?.call();
           },
-        ),
+        ),*/
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_none_outlined, color: textColor),

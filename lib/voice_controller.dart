@@ -187,6 +187,7 @@ class VoiceController {
         sets: sets,
       );
     }
+    return null;
   }
 
   Future<void> startListeningForTimer({

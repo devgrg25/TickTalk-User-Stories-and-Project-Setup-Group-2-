@@ -438,14 +438,17 @@ class _MainPageState extends State<MainPage> {
         children: [
           if (_activeTimer != null) _buildActiveTimerBanner(),
           BottomNavigationBar(
-            selectedItemColor: const Color(0xFF007BFF),
+            selectedItemColor: _showingCountdown
+                ? Colors.grey             // No highlight when countdown is showing
+                : const Color(0xFF007BFF),// Normal highlight when not in countdown
+
             unselectedItemColor: Colors.grey,
             type: BottomNavigationBarType.fixed,
-            currentIndex: _tabIndex,
+            currentIndex: _tabIndex,      // ← keep this unchanged
             onTap: (index) {
               setState(() {
                 if (_showingCountdown) {
-                  _showingCountdown = false;
+                  _showingCountdown = false; // Close countdown when switching tabs
                 }
                 _tabIndex = index;
               });
