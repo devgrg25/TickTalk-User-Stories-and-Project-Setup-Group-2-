@@ -219,6 +219,24 @@ class VoiceController {
       ),
     );
   }
+  Future<void> startListeningRaw({
+    required void Function(String text) onCommand,
+  }) async {
+    final available = await _speech.initialize();
+    if (!available) return;
+
+    await _speech.listen(
+      listenMode: stt.ListenMode.confirmation,
+      partialResults: false,
+      localeId: 'en_US',
+      onResult: (res) {
+        final words = res.recognizedWords.trim();
+        if (words.isNotEmpty && res.finalResult) {
+          onCommand(words);
+        }
+      },
+    );
+  }
 
   Future<void> startListeningForControl({
     required void Function(String command) onCommand,

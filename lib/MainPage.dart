@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:convert';
 import 'dart:async';
-
+import 'stopwatch_normal_mode.dart';
 import 'homepage.dart';
 import 'create_timer_screen.dart';
 import 'timer_model.dart';
@@ -16,7 +16,8 @@ import 'routines.dart';
 import 'routines_page.dart';
 
 class MainPage extends StatefulWidget {
-  const MainPage({super.key});
+  final bool tutorialMode;
+  const MainPage({super.key, this.tutorialMode = false});
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -26,6 +27,10 @@ class _MainPageState extends State<MainPage> {
   int _tabIndex = 0;
   bool _showingCountdown = false;
   bool _isListening = false;
+  //tutorial variables
+  bool tutorialActive = false;
+  bool tutorialPaused = false;
+  int tutorialStep = 0;
 
   TimerData? _editingTimer;
   TimerData? _activeTimer;
@@ -45,14 +50,18 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
-
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.tutorialMode) {
+        _startTutorial();
+      }
+    });
     // TTS once
     _initTts();
 
     _routines = PredefinedRoutines(
       stopListening: _stopListening,
       speak: _speak,
-      playTimer: _playTimerV, // you said to ignore V for now; leaving hook intact
+      playTimer: _playTimerV,
     );
 
     _loadTimers();
@@ -307,6 +316,34 @@ class _MainPageState extends State<MainPage> {
     if (_isListening) return;
     setState(() => _isListening = true);
 
+    // ✅ CASE 0: Tutorial is active → only listen for skip / resume
+    if (tutorialActive) {
+      setState(() => _isListening = true);
+
+      await _voiceController.startListeningRaw(
+        onCommand: (String heard) async {
+          final words = heard.toLowerCase().trim();
+          setState(() => _isListening = false);
+
+          // ✅ SKIP / END tutorial commands
+          if (words.contains("skip") ||
+              words.contains("stop tutorial") ||
+              words.contains("end tutorial") ||
+              words.contains("cancel tutorial") ||
+              words.contains("done")) {
+            _endTutorial();
+            return;
+          }
+
+          // ✅ No skip → Resume tutorial where it left off
+          setState(() => tutorialPaused = false);
+          _runTutorial();
+        },
+      );
+
+      return; // ✅ STOP HERE (do NOT allow timer voice logic)
+    }
+
     // CASE 1: There is an active timer → listen for pause/resume/stop
     if (_activeTimer != null) {
       await _voiceController.startListeningForControl(
@@ -377,6 +414,89 @@ class _MainPageState extends State<MainPage> {
       }
     }
   }
+  //-----------Tutorial functions----------------
+  void _endTutorial() async {
+    setState(() {
+      tutorialActive = false;
+      tutorialPaused = false;
+    });
+
+    await _tts.stop();
+    await _speakWait("Tutorial skipped. You can now explore the app freely.");
+  }
+
+  void _startTutorial() {
+    setState(() {
+      tutorialActive = true;
+      tutorialPaused = false;
+      tutorialStep = 0;
+    });
+    _runTutorial();
+  }
+
+  Future<void> _runTutorial() async {
+    if (!mounted || tutorialPaused == true) return;
+
+    switch (tutorialStep) {
+
+    // STEP 0 — Create Timer Page
+      case 0:
+        setState(() => _tabIndex = 1);
+        await _speakWait(
+            'This is the timer creation page. Here is a step by step guide on how to use it. '
+                'One: enter a timer name. Two: set work minutes. Three: set break minutes. Four: set the number of sets. '
+                'You can also say: Start a study timer for four sets with twenty five minutes work and five minutes break.'
+        );
+        tutorialStep++;
+        break;
+
+    // STEP 1 — Stopwatch Selector
+      case 1:
+        setState(() => _tabIndex = 4);
+        await _speakWait(
+            'This is the stopwatch selector. Choose Normal Mode for a single stopwatch with voice control, '
+                'or Player Mode to track up to six players.'
+        );
+        tutorialStep++;
+        break;
+
+    // STEP 2 — Normal Mode Page
+      case 2:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const StopwatchNormalMode(autoStart: false)),
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+        await _speakWait(
+            'This is Normal Mode. Say start to begin, stop to pause, lap to mark a lap, and reset to clear it.'
+        );
+        tutorialStep++;
+        break;
+
+    // TUTORIAL DONE
+      default:
+        tutorialActive = false;
+        await _speakWait("Tutorial complete. You can now explore the app freely.");
+        break;
+    }
+
+    // Continue automatically unless paused
+    if (tutorialActive && !tutorialPaused) {
+      _runTutorial();
+    }
+  }
+  Future<void> _speakWait(String text) async {
+    await _tts.stop();
+    await _tts.setSpeechRate(0.45);
+    await _tts.awaitSpeakCompletion(true);
+    await _tts.speak(text);
+
+    // Wait here if paused (speech will be frozen)
+    while (tutorialPaused) {
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
 
   // ---------- UI HELPERS ----------
   String _formatMMSS(int secondsTotal) {
@@ -462,7 +582,26 @@ class _MainPageState extends State<MainPage> {
             ],
           ),
           GestureDetector(
-            onTap: _isListening ? _stopListening : _startListening,
+            onTap: () async {
+              if (_isListening) {
+                // User finished speaking → Resume tutorial
+                await _stopListening();
+
+                if (tutorialActive) {
+                  setState(() => tutorialPaused = false);
+                  _runTutorial(); // resume
+                }
+
+              } else {
+                // User starts speaking → Pause tutorial
+                if (tutorialActive) {
+                  setState(() => tutorialPaused = true);
+                  await _tts.stop(); // stop speaking immediately
+                }
+
+                await _startListening();
+              }
+            },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               color: _isListening ? Colors.redAccent : const Color(0xFF007BFF),
