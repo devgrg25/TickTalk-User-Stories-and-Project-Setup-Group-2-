@@ -187,6 +187,7 @@ class VoiceController {
         sets: sets,
       );
     }
+    return null;
   }
 
   Future<void> startListeningForTimer({
@@ -216,6 +217,24 @@ class VoiceController {
         autoPunctuation: true,
         enableHapticFeedback: true,
       ),
+    );
+  }
+  Future<void> startListeningRaw({
+    required void Function(String text) onCommand,
+  }) async {
+    final available = await _speech.initialize();
+    if (!available) return;
+
+    await _speech.listen(
+      listenMode: stt.ListenMode.confirmation,
+      partialResults: false,
+      localeId: 'en_US',
+      onResult: (res) {
+        final words = res.recognizedWords.trim();
+        if (words.isNotEmpty && res.finalResult) {
+          onCommand(words);
+        }
+      },
     );
   }
 

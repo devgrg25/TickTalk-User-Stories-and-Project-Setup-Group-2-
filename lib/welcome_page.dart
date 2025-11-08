@@ -139,6 +139,13 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
 
       if (!mounted) return;
 
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainPage(tutorialMode: true)),
+      );
+      return;
+      /*
       // 1) Go to Create Timer page immediately
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const CreateTimerScreen()),
@@ -196,7 +203,7 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
 
       if (!mounted) return;
 
-      return;
+      return;*/
     }
 
 
