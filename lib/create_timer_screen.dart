@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'countdown_screen.dart';
 import 'timer_model.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'voice_controller.dart';
@@ -19,14 +18,12 @@ class CreateTimerScreen extends StatefulWidget {
 class _CreateTimerScreenState extends State<CreateTimerScreen> {
   final _nameController = TextEditingController();
   late FlutterTts _tts;
-  // REMOVED: No longer need a controller for total time.
-  // final _totalTimeController = TextEditingController();
   final _workIntervalController = TextEditingController();
   final _breakIntervalController = TextEditingController();
   final _setsController = TextEditingController();
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _isListening = false;
-  String _lastHeard = "Tap the mic and speak a command...";
+  String _lastHeard = "This shows the last spoken command";
 
   // Check if we are in "edit" mode
   bool get _isEditing => widget.existingTimer != null;
@@ -45,6 +42,21 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
       _setsController.text = widget.existingTimer!.totalSets.toString();
     }
   }
+
+  @override
+  void didUpdateWidget(CreateTimerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // If the screen is now in editing mode and the timer changed, update fields
+    if (widget.existingTimer != null &&
+        widget.existingTimer != oldWidget.existingTimer) {
+      _nameController.text = widget.existingTimer!.name;
+      _workIntervalController.text = widget.existingTimer!.workInterval.toString();
+      _breakIntervalController.text = widget.existingTimer!.breakInterval.toString();
+      _setsController.text = widget.existingTimer!.totalSets.toString();
+    }
+  }
+
 
   Future<void> _initTts() async {
     try {
@@ -77,95 +89,42 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
     _tts.speak(message); // read out the message
   }
 
+  Future<void> _confirmTimerWithVoice(TimerData timerData) async {
+    final name = timerData.name;
+    final work = timerData.workInterval;
+    final rest = timerData.breakInterval;
+    final sets = timerData.totalSets;
 
-  void _listen() async {
-    if (!_isListening) {
-      bool available = await _speech.initialize();
-      if (available) {
-        setState(() => _isListening = true);
-        _speech.listen(
-          onResult: (val) => setState(() {
-            _lastHeard = val.recognizedWords;
-            // UPDATED: Process the command only on the final result for efficiency.
-            if (val.finalResult) {
-              _parseVoiceCommand(_lastHeard);
-            }
-          }),
-        );
-      }
-    } else {
-      setState(() => _isListening = false);
-      _speech.stop();
-    }
-  }
+    final confirmationText = rest > 0
+        ? "You created a timer named $name. Work for $work minutes, break for $rest minutes, for $sets sets. Should I start?"
+        : "You created a timer named $name for $work minutes. Should I start?";
 
-  void _parseVoiceCommand(String command) {
-    final commandLower = command.toLowerCase();
+    await _tts.stop();
+    await _tts.speak(confirmationText);
 
-    final simpleTimerMatch = RegExp(
-        r'(?:start|create)(?: a)?(?: timer)?(?: for)? (\d+)\s*(?:minute|min|mins)?'
-    ).firstMatch(commandLower);
+    // Start listening for yes/no answer
+    bool available = await _speech.initialize();
+    if (!available) return;
 
-    // --- UPDATED: More flexible Regular Expressions ---
+    setState(() => _isListening = true);
 
-    // Captures names like "start a study timer" or "create a workout timer"
-    // The '(\w+)' looks for a single word after 'a' if 'timer' isn't the next word.
-    final nameMatch = RegExp(r'start a (\w+) timer|create a (\w+) timer').firstMatch(commandLower);
+    await _speech.listen(
+      listenFor: const Duration(seconds: 5),
+      onResult: (result) async {
+        final spoken = result.recognizedWords.toLowerCase();
+        setState(() => _lastHeard = spoken);
 
-    // Captures "25 minute work", "work for 25 mins", "25 min focus", "30 work"
-    final workMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:work|focus|session)|(?:work|focus|session)\s*(\d+)').firstMatch(commandLower);
+        if (spoken.contains("yes") || spoken.contains("start")) {
+          await _tts.speak("Starting now.");
+          widget.onSaveTimer?.call(timerData);
+        } else if (spoken.contains("no") || spoken.contains("cancel")) {
+          await _tts.speak("Okay, cancelled.");
+        }
 
-    // Captures "5 minute break", "rest for 10 mins", "15 min rest", "5 break"
-    final breakMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:break|rest)|(?:break|rest)\s*(\d+)').firstMatch(commandLower);
-
-    // Captures "for 4 sets", "3 rounds", "do 8 sets"
-    final setsMatch = RegExp(r'(\d+)\s*(?:set|sets|round|rounds)').firstMatch(commandLower);
-
-    // --- Logic to populate fields ---
-
-    if (nameMatch != null) {
-      // Check group 1, if null, use group 2. This handles both "start a..." and "create a..."
-      _nameController.text = nameMatch.group(1) ?? nameMatch.group(2) ?? '';
-    }
-
-    if (workMatch != null) {
-      // Check the first capture group, if it's null, use the second one.
-      // This handles cases where the number comes before or after the keyword.
-      _workIntervalController.text = workMatch.group(1) ?? workMatch.group(2) ?? '';
-    }
-
-    if (breakMatch != null) {
-      _breakIntervalController.text = breakMatch.group(1) ?? breakMatch.group(2) ?? '';
-    }
-
-    if (setsMatch != null) {
-      _setsController.text = setsMatch.group(1) ?? '';
-    }
-
-    // --- NEW: Handle simple timer separately ---
-    if (simpleTimerMatch != null) {
-      final simpleMinutes = int.tryParse(simpleTimerMatch.group(1) ?? '');
-      if (simpleMinutes != null) {
-        Future.delayed(const Duration(milliseconds: 750), () {
-          _speech.stop();
-          setState(() => _isListening = false);
-          startCountdown(simpleTimerMinutes: simpleMinutes);
-        });
-        return;
-      }
-    }
-
-    // --- Auto-start logic ---
-
-    // Checks if the command contains a trigger word and essential fields have been filled.
-    if (commandLower.contains('start') || commandLower.contains('create')) {
-      // A small delay gives the user a moment to see the fields populate before starting.
-      Future.delayed(const Duration(milliseconds: 750), () {
         _speech.stop();
         setState(() => _isListening = false);
-        startCountdown();
-      });
-    }
+      },
+    );
   }
 
   // UPDATED: Core logic for starting the timer is changed here.
@@ -186,7 +145,6 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
         breakTime = int.tryParse(_breakIntervalController.text) ?? 5; // Default break is 5 mins
         totalSets = int.tryParse(_setsController.text) ?? 0;
     }
-
 
     // 2. Validate essential inputs.
     if (workTime <= 0 || totalSets <= 0) {
@@ -212,19 +170,14 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
       currentSet: 1,
     );
 
-    // 5. Return the saved data to the previous screen (HomeScreen)
-    //Navigator.of(context).pop(timerData);
+    //widget.onSaveTimer?.call(timerData);
+    //_confirmTimerWithVoice(timerData);
+    if (!_isEditing) {
+      _confirmTimerWithVoice(timerData);
+    } else {
+      widget.onSaveTimer?.call(timerData); // Just update immediately when editing
+    }
 
-    widget.onSaveTimer?.call(timerData);
-    //Navigator.of(context).pop(timerData);
-
-    // 5. Navigate to the countdown screen.
-    /*Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CountdownScreen(timerData: timerData),
-      ),
-    );*/
   }
 
   // --- UI BUILDERS ---
@@ -290,23 +243,6 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
             // ... (The voice command card remains the same)
             child: Column(
               children: [
-                const Text(
-                  'Or Use a Voice Command',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '"Start a study timer for 4 sets with 25 minute work and 5 minute break."',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic),
-                ),
-                const SizedBox(height: 16),
-                FloatingActionButton(
-                  onPressed: _listen,
-                  backgroundColor: primaryBlue,
-                  child: Icon(_isListening ? Icons.mic : Icons.mic_off,
-                      color: Colors.white),
-                ),
                 const SizedBox(height: 8),
                 Text(_isListening ? "Listening..." : _lastHeard,
                     style: TextStyle(color: Colors.grey[700])),

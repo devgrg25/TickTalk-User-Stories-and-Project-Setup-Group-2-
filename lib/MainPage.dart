@@ -31,10 +31,12 @@ class _MainPageState extends State<MainPage> {
   bool tutorialActive = false;
   bool tutorialPaused = false;
   int tutorialStep = 0;
-
+  //create timer variables
   TimerData? _editingTimer;
   TimerData? _activeTimer;
   Timer? _ticker;
+  bool _awaitingConfirmation = false;
+  TimerData? _pendingTimer;
 
   final FlutterTts _tts = FlutterTts();
   final VoiceController _voiceController = VoiceController();
@@ -186,6 +188,9 @@ class _MainPageState extends State<MainPage> {
   void _editTimer(TimerData timerToEdit) {
     setState(() {
       _editingTimer = timerToEdit;
+      _voiceFilledTimer = null;   // prevent voice timer from overwriting edit data
+      _awaitingConfirmation = false; // do not play confirmation voice on edit
+      _pendingTimer = null;
       _tabIndex = 1;
     });
   }
@@ -316,8 +321,39 @@ class _MainPageState extends State<MainPage> {
     if (_isListening) return;
     setState(() => _isListening = true);
 
-    // ✅ CASE 0: Tutorial is active → only listen for skip / resume
+    // CASE -1: If create Timer is waiting for yes/no confirmation
+    if (_awaitingConfirmation && _pendingTimer != null && _tabIndex == 1) {
+      debugPrint('Case -1');
+      await _voiceController.startListeningRaw(
+        onCommand: (String heard) async {
+          final words = heard.toLowerCase();
+          debugPrint('Listening: $words');
+
+          setState(() => _isListening = false);
+
+          if (words.contains("yes") || words.contains("start")) {
+            _awaitingConfirmation = false;
+            _startTimer(_pendingTimer!);
+            _pendingTimer = null;
+            return;
+          }
+
+          if (words.contains("no") || words.contains("cancel")) {
+            _awaitingConfirmation = false;
+            _pendingTimer = null;
+            await _tts.speak("Okay, cancelled.");
+            return;
+          }
+
+          await _tts.speak("Please say yes or no.");
+        },
+      );
+      return; // Do not proceed to normal listening
+    }
+
+    // CASE 0: Tutorial is active → only listen for skip / resume
     if (tutorialActive) {
+      debugPrint('Case 0');
       setState(() => _isListening = true);
 
       await _voiceController.startListeningRaw(
@@ -325,7 +361,7 @@ class _MainPageState extends State<MainPage> {
           final words = heard.toLowerCase().trim();
           setState(() => _isListening = false);
 
-          // ✅ SKIP / END tutorial commands
+          //SKIP / END tutorial commands
           if (words.contains("skip") ||
               words.contains("stop tutorial") ||
               words.contains("end tutorial") ||
@@ -335,17 +371,18 @@ class _MainPageState extends State<MainPage> {
             return;
           }
 
-          // ✅ No skip → Resume tutorial where it left off
+          //No skip → Resume tutorial where it left off
           setState(() => tutorialPaused = false);
           _runTutorial();
         },
       );
 
-      return; // ✅ STOP HERE (do NOT allow timer voice logic)
+      return; //STOP HERE (do NOT allow timer voice logic)
     }
 
     // CASE 1: There is an active timer → listen for pause/resume/stop
     if (_activeTimer != null) {
+      debugPrint('Case 1');
       await _voiceController.startListeningForControl(
         onCommand: (cmd) async {
           setState(() => _isListening = false);
@@ -373,10 +410,11 @@ class _MainPageState extends State<MainPage> {
     await _voiceController.startListeningForTimer(
       onCommand: (ParsedVoiceCommand data) async {
         await _voiceController.stopListening();
+        debugPrint('Case 2');
         if (!mounted) return;
         setState(() => _isListening = false);
 
-        await _voiceController.speak("Creating timer.");
+        //await _voiceController.speak("Creating timer.");
 
         final work = data.workMinutes ?? data.simpleTimerMinutes ?? 0;
         final sets = data.sets ?? 1;
@@ -517,10 +555,37 @@ class _MainPageState extends State<MainPage> {
       activeTimer: _activeTimer,
     ),
     // ValueKey forces Create page to rebuild when voice prefills change
-    CreateTimerScreen(
-      key: ValueKey(_voiceFilledTimer?.id ?? 'create_static'),
-      existingTimer: _editingTimer ?? _voiceFilledTimer,
-      onSaveTimer: _handleSaveTimer,
+    Builder(
+      builder: (context) {
+        final timer = _editingTimer ?? _voiceFilledTimer;
+
+        // ✅ If timer is prefilled and we are NOT already waiting for confirmation:
+        if (timer != null && !_awaitingConfirmation) {
+          _pendingTimer = timer;
+          _awaitingConfirmation = true;
+
+          final name = timer.name;
+          final work = timer.workInterval;
+          final rest = timer.breakInterval;
+          final sets = timer.totalSets;
+
+          final text = rest > 0
+              ? "You created a timer named $name. Work for $work minutes, break for $rest minutes, for $sets sets. Say yes to start or no to cancel."
+              : "You created a timer named $name for $work minutes. Say yes to start or no to cancel.";
+
+          // Speak *after* frame builds to avoid setState-in-build errors
+          Future.microtask(() async {
+            await _tts.stop();
+            await _tts.speak(text);
+          });
+        }
+
+        return CreateTimerScreen(
+          key: ValueKey(_voiceFilledTimer?.id ?? 'create_static'),
+          existingTimer: timer,
+          onSaveTimer: _handleSaveTimer,
+        );
+      },
     ),
     RoutinesPage(routines: _routines),
     const Placeholder(), // Activity page
