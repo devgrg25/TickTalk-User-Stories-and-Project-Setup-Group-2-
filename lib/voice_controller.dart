@@ -165,20 +165,27 @@ class VoiceController {
   Future<ParsedVoiceCommand?> interpretCommand(String command) async {
     final text = command.toLowerCase();
 
-    final nameMatch = RegExp(r'start a (\w+) timer|create a (\w+) timer').firstMatch(text);
-    final workMatch = RegExp(
-        r'(?:for\s*)?(\d+)\s*(?:minute|min|mins)?\s*(?:of\s*)?(?:work|focus|session|timer||)?'
+    final nameMatch = RegExp(
+      r'(?:start|create)\s+(?:a\s+)?(.+?)?\s*timer\b',
+      caseSensitive: false,
     ).firstMatch(text);
-    final breakMatch = RegExp(r'(\d+)\s*(?:minute|min|mins)?\s*(?:break|rest)|(?:break|rest)\s*(\d+)').firstMatch(text);
+    final workMatch = RegExp(
+        r'(?:for\s*)?(\d+)\s*(?:minute|min|mins|minutes)?\s*(?:of\s*)?(?:work|focus|session|timer||)?'
+    ).firstMatch(text);
+    final breakMatch = RegExp(r'(\d+)\s*(?:minute|min|mins|minutes)?\s*(?:break|rest|interval)|(?:break|rest|interval)\s*(\d+)').firstMatch(text);
     final setsMatch = RegExp(
-        r'(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s*(?:set|sets|round|rounds)'
+      r'\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s*(?:set|sets|round|rounds)\b',
+      caseSensitive: false,
     ).firstMatch(text);
 
     if (workMatch != null) {
-      final name = nameMatch?.group(1) ?? nameMatch?.group(2);
+      final rawName = nameMatch?.group(1)?.trim();
+      final name = (rawName != null && rawName.isNotEmpty && rawName != 'a')
+          ? rawName
+          : null;
       final workMinutes = int.tryParse(workMatch.group(1) ?? workMatch.group(2) ?? '');
       final breakMinutes = int.tryParse(breakMatch?.group(1) ?? breakMatch?.group(2) ?? '');
-      final sets = int.tryParse(setsMatch?.group(1) ?? '');
+      final sets = parseNumber(setsMatch?.group(1) ?? '');
 
       return ParsedVoiceCommand(
         name: name,
