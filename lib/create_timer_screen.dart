@@ -7,8 +7,9 @@ import 'voice_controller.dart';
 class CreateTimerScreen extends StatefulWidget {
   final TimerData? existingTimer;
   final Function(TimerData)? onSaveTimer;
+  final bool startVoiceConfirmation;
 
-  const CreateTimerScreen({super.key, this.existingTimer, this.onSaveTimer});
+  const CreateTimerScreen({super.key, this.existingTimer, this.onSaveTimer, this.startVoiceConfirmation = false,});
 
 
   @override
@@ -40,6 +41,12 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
       _workIntervalController.text = widget.existingTimer!.workInterval.toString();
       _breakIntervalController.text = widget.existingTimer!.breakInterval.toString();
       _setsController.text = widget.existingTimer!.totalSets.toString();
+    }
+    if (widget.startVoiceConfirmation && widget.existingTimer != null) {
+      // We must wait for the screen to build before speaking
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _confirmTimerWithVoice(widget.existingTimer!);
+      });
     }
   }
 
@@ -172,10 +179,16 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
 
     //widget.onSaveTimer?.call(timerData);
     //_confirmTimerWithVoice(timerData);
-    if (!_isEditing) {
-      _confirmTimerWithVoice(timerData);
+    final bool isTrulyEditing = _isEditing && !widget.startVoiceConfirmation;
+
+    if (isTrulyEditing) {
+      // User tapped "Edit" on an old timer and is now saving.
+      // Just save immediately.
+      widget.onSaveTimer?.call(timerData);
     } else {
-      widget.onSaveTimer?.call(timerData); // Just update immediately when editing
+      // This is either a NEW manual timer OR a voice-filled timer.
+      // In both cases, run the voice confirmation.
+      _confirmTimerWithVoice(timerData);
     }
 
   }

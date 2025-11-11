@@ -35,8 +35,6 @@ class _MainPageState extends State<MainPage> {
   TimerData? _editingTimer;
   TimerData? _activeTimer;
   Timer? _ticker;
-  bool _awaitingConfirmation = false;
-  TimerData? _pendingTimer;
 
   final FlutterTts _tts = FlutterTts();
   final VoiceController _voiceController = VoiceController();
@@ -189,8 +187,6 @@ class _MainPageState extends State<MainPage> {
     setState(() {
       _editingTimer = timerToEdit;
       _voiceFilledTimer = null;   // prevent voice timer from overwriting edit data
-      _awaitingConfirmation = false; // do not play confirmation voice on edit
-      _pendingTimer = null;
       _tabIndex = 1;
     });
   }
@@ -320,36 +316,6 @@ class _MainPageState extends State<MainPage> {
     _countdownController.stopSpeaking();
     if (_isListening) return;
     setState(() => _isListening = true);
-
-    // CASE -1: If create Timer is waiting for yes/no confirmation
-    if (_awaitingConfirmation && _pendingTimer != null && _tabIndex == 1) {
-      debugPrint('Case -1');
-      await _voiceController.startListeningRaw(
-        onCommand: (String heard) async {
-          final words = heard.toLowerCase();
-          debugPrint('Listening: $words');
-
-          setState(() => _isListening = false);
-
-          if (words.contains("yes") || words.contains("start")) {
-            _awaitingConfirmation = false;
-            _pendingTimer = null;
-            _startTimer(_pendingTimer!);
-            return;
-          }
-
-          if (words.contains("no") || words.contains("cancel")) {
-            _awaitingConfirmation = false;
-            _pendingTimer = null;
-            await _tts.speak("Okay, cancelled.");
-            return;
-          }
-
-          await _tts.speak("Please say yes or no.");
-        },
-      );
-      return; // Do not proceed to normal listening
-    }
 
     // CASE 0: Tutorial is active → only listen for skip / resume
     if (tutorialActive) {
@@ -560,6 +526,7 @@ class _MainPageState extends State<MainPage> {
       key: ValueKey(_voiceFilledTimer?.id ?? 'create_static'),
       existingTimer: _editingTimer ?? _voiceFilledTimer,
       onSaveTimer: _handleSaveTimer,
+      startVoiceConfirmation: (_voiceFilledTimer != null && _editingTimer == null),
     ),
     RoutinesPage(routines: _routines),
     const Placeholder(), // Activity page
