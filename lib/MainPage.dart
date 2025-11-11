@@ -333,8 +333,8 @@ class _MainPageState extends State<MainPage> {
 
           if (words.contains("yes") || words.contains("start")) {
             _awaitingConfirmation = false;
-            _startTimer(_pendingTimer!);
             _pendingTimer = null;
+            _startTimer(_pendingTimer!);
             return;
           }
 
@@ -435,6 +435,7 @@ class _MainPageState extends State<MainPage> {
 
         if (!mounted) return;
         setState(() {
+          _editingTimer = null;
           _voiceFilledTimer = timerData;
           _tabIndex = 1; // switch to Create screen
         });
@@ -555,37 +556,10 @@ class _MainPageState extends State<MainPage> {
       activeTimer: _activeTimer,
     ),
     // ValueKey forces Create page to rebuild when voice prefills change
-    Builder(
-      builder: (context) {
-        final timer = _editingTimer ?? _voiceFilledTimer;
-
-        // ✅ If timer is prefilled and we are NOT already waiting for confirmation:
-        if (timer != null && !_awaitingConfirmation) {
-          _pendingTimer = timer;
-          _awaitingConfirmation = true;
-
-          final name = timer.name;
-          final work = timer.workInterval;
-          final rest = timer.breakInterval;
-          final sets = timer.totalSets;
-
-          final text = rest > 0
-              ? "You created a timer named $name. Work for $work minutes, break for $rest minutes, for $sets sets. Say yes to start or no to cancel."
-              : "You created a timer named $name for $work minutes. Say yes to start or no to cancel.";
-
-          // Speak *after* frame builds to avoid setState-in-build errors
-          Future.microtask(() async {
-            await _tts.stop();
-            await _tts.speak(text);
-          });
-        }
-
-        return CreateTimerScreen(
-          key: ValueKey(_voiceFilledTimer?.id ?? 'create_static'),
-          existingTimer: timer,
-          onSaveTimer: _handleSaveTimer,
-        );
-      },
+    CreateTimerScreen(
+      key: ValueKey(_voiceFilledTimer?.id ?? 'create_static'),
+      existingTimer: _editingTimer ?? _voiceFilledTimer,
+      onSaveTimer: _handleSaveTimer,
     ),
     RoutinesPage(routines: _routines),
     const Placeholder(), // Activity page
