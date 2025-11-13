@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'welcome_page.dart'; // ✅ Correct import
+import 'tutorial/welcome_page.dart'; // ✅ Correct import
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
