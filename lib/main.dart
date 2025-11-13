@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'UI/MainPage.dart';
-import 'UI/tutorial/welcome_page.dart';
+import 'MainPage.dart';
+import 'welcome_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

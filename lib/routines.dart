@@ -1,4 +1,4 @@
-import '../models/routine_timer_model.dart';
+import 'routine_timer_model.dart';
 
 // Typedefs are unchanged
 typedef StopListeningCallback = void Function();

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import '../../logic/models/routine_timer_model.dart'; // To access the NEW TimerData class
+import 'routine_timer_model.dart'; // To access the NEW TimerData class
 
 class CountdownScreenV extends StatefulWidget {
   final TimerDataV timerData;

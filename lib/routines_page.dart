@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../logic/routines/routines.dart'; // Imports the logic class
-import '../../logic/models/timer_model.dart'; // We also need this for the typedefs in routines.dart
+import 'routines.dart'; // Imports the logic class
+import 'timer_model.dart'; // We also need this for the typedefs in routines.dart
 
 class RoutinesPage extends StatelessWidget {
   final PredefinedRoutines routines;
