@@ -1,9 +1,5 @@
-// stopwatcht2us2.dart  (ADDED tutorialMode + overlay + TTS narration; original logic preserved)
-
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 
 class StopwatchT2US2 extends StatefulWidget {
@@ -13,7 +9,7 @@ class StopwatchT2US2 extends StatefulWidget {
     this.onTutorialFinish,
   });
 
-  // optional tutorial hooks (non-breaking)
+  // optional tutorial hooks (kept for future use)
   final bool tutorialMode;
   final VoidCallback? onTutorialFinish;
 
@@ -28,17 +24,8 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
   late Ticker _ticker;
   bool _isRunning = false;
 
-  // Voice and TTS
-  final stt.SpeechToText _speech = stt.SpeechToText();
-  final FlutterTts _tts = FlutterTts();
-  bool _isListening = false;
-
   // Lap tracking
   List<Duration> _laps = [];
-
-  // Time announcement
-  Timer? _announcementTimer;
-  Duration _lastAnnouncedTime = Duration.zero;
 
   @override
   void initState() {
@@ -46,18 +33,13 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
     _stopwatch = Stopwatch();
     _elapsed = Duration.zero;
     _ticker = createTicker(_onTick);
-    _initSpeech();
-    _initTts();
-    // ✅ REMOVED: _start(); - No auto-start
   }
 
-  void _initSpeech() async {
-    await _speech.initialize();
-  }
-
-  void _initTts() async {
-    await _tts.setLanguage('en-US');
-    await _tts.setSpeechRate(0.5);
+  @override
+  void dispose() {
+    _ticker.dispose();
+    _stopwatch.stop();
+    super.dispose();
   }
 
   void _onTick(Duration duration) {
@@ -65,45 +47,7 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
       setState(() {
         _elapsed = _stopwatch.elapsed;
       });
-      _checkTimeAnnouncement();
     }
-  }
-
-  // ✅ Announce time every 30 seconds
-  void _checkTimeAnnouncement() {
-    final currentSeconds = _elapsed.inSeconds;
-    final lastAnnouncedSeconds = _lastAnnouncedTime.inSeconds;
-
-    if (currentSeconds > 0 &&
-        currentSeconds % 30 == 0 &&
-        currentSeconds != lastAnnouncedSeconds) {
-      _lastAnnouncedTime = _elapsed;
-      _announceTime();
-    }
-  }
-
-  Future<void> _announceTime() async {
-    final minutes = _elapsed.inMinutes;
-    final seconds = _elapsed.inSeconds.remainder(60);
-
-    String announcement;
-    if (minutes > 0) {
-      announcement = "$minutes minute${minutes != 1 ? 's' : ''} and $seconds second${seconds != 1 ? 's' : ''}";
-    } else {
-      announcement = "$seconds second${seconds != 1 ? 's' : ''}";
-    }
-
-    await _tts.speak(announcement);
-  }
-
-  @override
-  void dispose() {
-    _ticker.dispose();
-    _stopwatch.stop();
-    _speech.cancel();
-    _tts.stop();
-    _announcementTimer?.cancel();
-    super.dispose();
   }
 
   void _start() {
@@ -125,7 +69,6 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
   void _reset() {
     _stopwatch.reset();
     _laps.clear();
-    _lastAnnouncedTime = Duration.zero;
     setState(() => _elapsed = Duration.zero);
   }
 
@@ -134,46 +77,6 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
       setState(() {
         _laps.add(_elapsed);
       });
-    }
-  }
-
-  void _resume() {
-    if (!_isRunning) {
-      _stopwatch.start();
-      _ticker.start();
-      setState(() => _isRunning = true);
-    }
-  }
-
-  // ✅ Voice Command Handling
-  void _toggleListening() async {
-    if (_isListening) {
-      await _speech.stop();
-      setState(() => _isListening = false);
-    } else {
-      setState(() => _isListening = true);
-      await _speech.listen(
-        onResult: (result) {
-          final command = result.recognizedWords.toLowerCase();
-          _handleVoiceCommand(command);
-        },
-      );
-    }
-  }
-
-  void _handleVoiceCommand(String command) {
-    if (command.contains('start')) {
-      _start();
-      _tts.speak('Stopwatch started');
-    } else if (command.contains('stop')) {
-      _stop();
-      _tts.speak('Stopwatch stopped');
-    } else if (command.contains('lap')) {
-      _lap();
-      _tts.speak('Lap recorded');
-    } else if (command.contains('reset')) {
-      _reset();
-      _tts.speak('Stopwatch reset');
     }
   }
 
@@ -198,17 +101,6 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
         backgroundColor: Colors.white,
         elevation: 0,
         leading: const BackButton(color: Colors.black),
-        actions: [
-          // ✅ Mic Button in AppBar
-          IconButton(
-            icon: Icon(
-              _isListening ? Icons.mic : Icons.mic_off,
-              color: _isListening ? Colors.red : Colors.black,
-            ),
-            onPressed: _toggleListening,
-            tooltip: _isListening ? 'Stop listening' : 'Tap to speak',
-          ),
-        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -307,8 +199,7 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
       icon: Icon(icon, size: 24),
       label: Text(
         label,
-        style:
-        const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: color,

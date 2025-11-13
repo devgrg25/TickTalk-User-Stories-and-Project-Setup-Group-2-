@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
-//import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-//import 'dart:convert';
+
+// ✅ UI pages
 import 'settings_page.dart';
-//import 'stopwatch_normal_mode.dart';
-//import 'create_timer_screen.dart';
-import 'timer_model.dart';
-//import 'countdown_screen.dart';
-import 'countdown_screenV.dart';
-//import 'stopwatchmodeselecter.dart';
-import 'voice_controller.dart';
-import 'routine_timer_model.dart';
-import 'routines.dart';
+
+// ✅ Logic models
+import '../logic/models/timer_model.dart';
+import '../logic/models/routine_timer_model.dart';
+import '../logic/routines/routines.dart';
+
+// ✅ Timer screens
+import '../UI/timers/countdown_screenV.dart';
+
+// ✅ Voice system
+import '../logic/voice/base/global_voice_router.dart';
+import '../logic/voice/base/voice_controller_base.dart'; // if needed
+import '../logic/voice/timer_voice_controller.dart';
+import '../logic/voice/stopwatch_voice_controller.dart';
+import '../logic/voice/routines_voice_controller.dart';
+import '../logic/voice/tutorial_voice_controller.dart';
+
 
 class HomeScreen extends StatefulWidget {
   final List<TimerData> timers;
@@ -39,21 +47,40 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen> {
   final FlutterTts _tts = FlutterTts();
-  final VoiceController _voiceController = VoiceController();
   bool _isListening = false;
-  late PredefinedRoutines _routines;
 
-  //static const String _timersKey = 'saved_timers_list';
+  late final GlobalVoiceRouter _voiceRouter;
+  final _timerVoice = TimerVoiceController();
+  final _stopwatchVoice = StopwatchVoiceController();
+  final _routinesVoice = RoutinesVoiceController();
+  final _tutorialVoice = TutorialVoiceController();
+
+  late final PredefinedRoutines _routines;
 
   @override
   void initState() {
     super.initState();
     _initPage();
+
     _routines = PredefinedRoutines(
-      stopListening: _stopListening,
-      speak: _speak,
+      stopListening: () => _voiceRouter.stopListening(),
+      speak: (msg) => _tts.speak(msg),
       playTimer: _playTimerV,
     );
+
+    _voiceRouter = GlobalVoiceRouter(
+      timerController: _timerVoice,
+      stopwatchController: _stopwatchVoice,
+      routinesController: _routinesVoice,
+      tutorialController: _tutorialVoice,
+    );
+  }
+
+  Future<void> _initPage() async {
+    await _tts.setLanguage('en-US');
+    await _tts.setSpeechRate(0.9);
+    await Future.delayed(const Duration(milliseconds: 1000));
+    await _tts.speak("You are now on the home page.");
   }
 
   void _playTimerV(TimerDataV timerToPlay) {
@@ -65,128 +92,10 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _speak(String text) async {
-    try {
-      await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(0.9);
-      await _tts.speak(text);
-    } catch (e) {
-      print("TTS error: $e");
-    }
-  }
-
-  Future<void> _initPage() async {
-    await _voiceController.initialize();
-    //await _loadTimers();
-    await Future.delayed(const Duration(milliseconds: 1000));
-    await _tts.speak("You are now on the home page.");
-  }
-/*
-  Future<void> _loadTimers() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? timersString = prefs.getString(_timersKey);
-    if (timersString != null) {
-      final List<dynamic> timerJson = jsonDecode(timersString);
-      setState(() {
-        _timers = timerJson.map((json) => TimerData.fromJson(json)).toList();
-      });
-    }
-  }
-
-  Future<void> _saveTimers() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String timersString =
-    jsonEncode(_timers.map((timer) => timer.toJson()).toList());
-    await prefs.setString(_timersKey, timersString);
-  }
-
-  void _deleteTimer(String timerId) {
-    setState(() {
-      _timers.removeWhere((timer) => timer.id == timerId);
-    });
-    _saveTimers();
-  }
-
-  void _addOrUpdateTimer(TimerData timer) {
-    final index = widget.timers.indexWhere((t) => t.id == timer.id);
-    setState(() {
-      if (index != -1) {
-        widget.timers[index] = timer;
-      } else {
-        widget.timers.add(timer);
-      }
-    });
-    _saveTimers();
-  }
-
-
-  void _openCreateTimerScreen() async {
-    final result = await Navigator.push<TimerData>(
-      context,
-      MaterialPageRoute(builder: (_) => const CreateTimerScreen()),
-    );
-    if (result != null){
-      _addOrUpdateTimer(result);
-    }
-  }
-
-  void _editTimer(TimerData timerToEdit) async {
-    final result = await Navigator.push<TimerData>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CreateTimerScreen(existingTimer: timerToEdit),
-      ),
-    );
-    if (result != null) _addOrUpdateTimer(result);
-  }
-
-
-  void _playTimer(TimerData timerToPlay) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CountdownScreen(timerData: timerToPlay),
-      ),
-    );
-  }
-
-  void _openNormalStopwatch({bool autoStart = false}) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => StopwatchNormalMode(autoStart: autoStart),
-      ),
-    );
-  }
-
-  void _openStopwatchSelector() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const StopwatchModeSelector()),
-    );
-  }
-
-  Future<void> _startListening() async {
-    if (_isListening) return;
-    setState(() => _isListening = true);
-
-    await _voiceController.listenAndRecognize(onComplete: () {
-      if (mounted) {
-        setState(() => _isListening = false);
-      }
-    });
-  }
- */
-  Future<void> _stopListening() async {
-    setState(() => _isListening = false);
-    await _voiceController.stopListening();
-  }
-
-
   @override
   void dispose() {
     _tts.stop();
-    _voiceController.dispose();
+    _voiceRouter.stopListening();
     super.dispose();
   }
 
@@ -198,11 +107,18 @@ class HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text('TickTalk', style: TextStyle(color: Color(0xFF007BFF), fontWeight: FontWeight.bold, fontSize: 30)),
+        title: const Text(
+          'TickTalk',
+          style: TextStyle(
+              color: Color(0xFF007BFF),
+              fontWeight: FontWeight.bold,
+              fontSize: 30),
+        ),
         actions: [
           IconButton(
-              icon: const Icon(Icons.notifications_none, color: Colors.black),
-              onPressed: () {}),
+            icon: const Icon(Icons.notifications_none, color: Colors.black),
+            onPressed: () {},
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.black),
             onSelected: (String result) {
@@ -235,7 +151,6 @@ class HomeScreenState extends State<HomeScreen> {
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).padding.bottom + 16,
           ),
-          // increased from 90
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
@@ -333,25 +248,26 @@ class HomeScreenState extends State<HomeScreen> {
                   itemCount: widget.timers.length,
                   itemBuilder: (context, index) {
                     final timer = widget.timers[index];
-                    final bool isActive = widget.activeTimer?.id == timer.id;
+                    final bool isActive =
+                        widget.activeTimer?.id == timer.id;
 
                     return TimerCard(
                       title: timer.name,
                       status: isActive ? 'Active' : 'Ready',
                       feedback: 'Audio + Haptic',
-                      color: isActive ? Colors.green : const Color(0xFF007BFF),
+                      color: isActive
+                          ? Colors.green
+                          : const Color(0xFF007BFF),
                       onPlay: () {
                         if (!isActive) {
                           widget.onStartTimer(timer);
-                        }
-                        else {
+                        } else {
                           widget.onPlayTimer(timer);
                         }
                       },
                       onEdit: () => widget.onEditTimer(timer),
                       onDelete: () => widget.onDeleteTimer(timer.id),
                     );
-
                   },
                 ),
               ],
