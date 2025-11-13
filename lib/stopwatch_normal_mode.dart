@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
-import 'widgets/global_scaffold.dart';
 
 class StopwatchNormalMode extends StatefulWidget {
-  final bool autoStart;
+  final bool autoStart; // Flag to check if auto-started from homepage
 
   const StopwatchNormalMode({super.key, this.autoStart = false});
 
@@ -21,16 +20,14 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
   late Ticker _ticker;
   bool _isRunning = false;
 
-  final FlutterTts _tts = FlutterTts();
   final stt.SpeechToText _speech = stt.SpeechToText();
+  final FlutterTts _tts = FlutterTts();
+  bool _isListening = false;
+  String _lastRecognizedCommand = '';
 
   List<Duration> _laps = [];
   Duration _lastAnnouncedTime = Duration.zero;
   bool _showSummary = false;
-
-  // Voice control states
-  bool _isListening = false;
-  bool _isReadingLapSummary = false;
 
   @override
   void initState() {
@@ -38,46 +35,49 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
     _stopwatch = Stopwatch();
     _elapsed = Duration.zero;
     _ticker = createTicker(_onTick);
-    _initTts();
     _initSpeech();
+    _initTts();
 
-    // Auto-start if coming from homepage
+    // Auto-start if coming from homepage voice command
     if (widget.autoStart) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
-          _start();
+          _start(); // Auto-start the stopwatch
+          _startListening(); // Auto-start voice listening
         }
       });
     }
   }
 
-  Future<void> _initTts() async {
-    await _tts.setLanguage('en-US');
-    await _tts.setSpeechRate(0.5);
-    await _tts.setPitch(1.0);
+  Future<void> _initSpeech() async {
+    bool available = await _speech.initialize(
+      onStatus: (status) {
+        print('🎙️ Speech status: $status');
+        if (status == 'notListening' && mounted && !_showSummary && _isListening) {
+          // Auto-restart listening if it stops while user wants it on
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted && _isListening && !_showSummary) {
+              _startListening();
+            }
+          });
+        }
+      },
+      onError: (error) {
+        print('⚠️ Speech error: $error');
+      },
+    );
+
+    if (available) {
+      print('✅ Speech initialized successfully');
+    } else {
+      print('❌ Speech recognition not available');
+    }
   }
 
-  Future<void> _initSpeech() async {
-    try {
-      await _speech.initialize(
-        onStatus: (status) {
-          debugPrint('🎙 Speech status: $status');
-          if (status == 'done' || status == 'notListening') {
-            if (mounted) {
-              setState(() => _isListening = false);
-            }
-          }
-        },
-        onError: (error) {
-          debugPrint('⚠️ Speech error: $error');
-          if (mounted) {
-            setState(() => _isListening = false);
-          }
-        },
-      );
-    } catch (e) {
-      debugPrint('❌ Speech init error: $e');
-    }
+  Future<void> _initTts() async {
+    await _tts.setLanguage('en-US');
+    await _tts.setSpeechRate(0.3);
+    await _tts.setPitch(1.0);
   }
 
   void _onTick(Duration duration) {
@@ -102,13 +102,16 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
   }
 
   Future<void> _announceTime() async {
-    if (_isReadingLapSummary) return; // Don't interrupt lap summary
-
     final minutes = _elapsed.inMinutes;
     final seconds = _elapsed.inSeconds.remainder(60);
-    String announcement = minutes > 0
-        ? "$minutes minute${minutes != 1 ? 's' : ''} $seconds second${seconds != 1 ? 's' : ''}"
-        : "$seconds second${seconds != 1 ? 's' : ''}";
+
+    String announcement;
+    if (minutes > 0) {
+      announcement = "$minutes minute${minutes != 1 ? 's' : ''} $seconds second${seconds != 1 ? 's' : ''}";
+    } else {
+      announcement = "$seconds second${seconds != 1 ? 's' : ''}";
+    }
+
     await _tts.speak(announcement);
   }
 
@@ -116,8 +119,8 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
   void dispose() {
     _ticker.dispose();
     _stopwatch.stop();
-    _tts.stop();
-    _speech.stop();
+    _speech.cancel();
+    _tts.stop(); // Stop TTS when disposing
     super.dispose();
   }
 
@@ -153,130 +156,123 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
       setState(() {
         _laps.add(_elapsed);
       });
+      print('✅ Lap ${_laps.length} recorded: ${_formatTime(_elapsed)}');
     }
   }
 
-  // ==================== VOICE CONTROL ====================
+  void _toggleListening() async {
+    if (_isListening) {
+      await _stopListening();
+    } else {
+      await _startListening();
+    }
+  }
 
   Future<void> _startListening() async {
-    if (!await _speech.hasPermission) {
-      await _speech.initialize();
+    if (!_speech.isAvailable) {
+      await _initSpeech();
     }
 
-    if (!mounted || _isListening) return;
+    if (_speech.isAvailable && !_isListening) {
+      setState(() => _isListening = true);
 
-    setState(() => _isListening = true);
+      try {
+        await _speech.listen(
+          onResult: (result) {
+            final words = result.recognizedWords.toLowerCase().trim();
 
-    await _speech.listen(
-      listenMode: stt.ListenMode.confirmation,
-      partialResults: false,
-      localeId: 'en_US',
-      onResult: (result) async {
-        if (!mounted) return;
-
-        final words = result.recognizedWords.toLowerCase().trim();
-        if (words.isEmpty) return;
-
-        debugPrint('🗣 Recognized: $words');
-
-        if (result.finalResult) {
-          await _handleVoiceCommand(words);
-          await _stopListening();
-        }
-      },
-    );
+            if (result.finalResult && words.isNotEmpty) {
+              print('✅ Final command: "$words"');
+              setState(() {
+                _lastRecognizedCommand = words;
+              });
+              _handleVoiceCommand(words);
+            } else if (words.isNotEmpty) {
+              setState(() {
+                _lastRecognizedCommand = '$words...';
+              });
+            }
+          },
+          listenFor: const Duration(minutes: 10),
+          pauseFor: const Duration(seconds: 2),
+          partialResults: true,
+          cancelOnError: false,
+          listenMode: stt.ListenMode.confirmation,
+        );
+      } catch (e) {
+        print('❌ Listen error: $e');
+        setState(() => _isListening = false);
+      }
+    }
   }
 
   Future<void> _stopListening() async {
-    try {
-      await _speech.stop();
-    } catch (_) {}
-    if (mounted) {
-      setState(() => _isListening = false);
-    }
+    await _speech.stop();
+    setState(() {
+      _isListening = false;
+      _lastRecognizedCommand = '';
+    });
   }
 
   Future<void> _handleVoiceCommand(String command) async {
-    // Stop reading lap summary if active
-    if (_isReadingLapSummary && (command.contains('skip') ||
-        command.contains('stop') ||
-        command.contains('close'))) {
-      await _stopReadingLapSummary();
-      return;
-    }
+    print('🎯 Processing: "$command"');
 
-    if (command.contains('start')) {
-      _start();
-      await _tts.speak('Stopwatch started');
-    }
-    else if (command.contains('stop') || command.contains('pause')) {
-      _stop();
-      await _tts.speak('Stopwatch stopped');
-    }
-    else if (command.contains('reset')) {
+    if (command.contains('reset')) {
       _reset();
-      await _tts.speak('Stopwatch reset');
+      _speakFast('Reset');
+      print('✅ RESET executed');
     }
     else if (command.contains('lap')) {
-      if (command.contains('summary')) {
-        await _readLapSummary();
-      } else {
+      if (_isRunning) {
         _lap();
-        await _tts.speak('Lap ${_laps.length} recorded');
+        _speakFast('Lap ${_laps.length}');
+        print('✅ LAP executed - Total laps: ${_laps.length}');
+      } else {
+        _speakFast('Start timer first');
+        print('⚠️ Cannot LAP - not running');
       }
     }
-    else if (command.contains('summary')) {
-      await _readLapSummary();
+    else if (command.contains('stop') || command.contains('pause')) {
+      if (_isRunning) {
+        _stop();
+        _speakFast('Stopped');
+        print('✅ STOP executed');
+      } else {
+        print('⚠️ Already stopped');
+      }
+    }
+    else if (command.contains('start')) {
+      if (!_isRunning) {
+        _start();
+        _speakFast('Started');
+        print('✅ START executed');
+      } else {
+        print('⚠️ Already running');
+      }
+    }
+    else if (command.contains('summary') || command.contains('show laps')) {
+      if (_laps.isNotEmpty) {
+        setState(() => _showSummary = true);
+        _speakFast('Showing laps');
+        // Stop listening when showing summary
+        await _stopListening();
+      } else {
+        _speakFast('No laps recorded');
+      }
     }
     else {
-      await _tts.speak('Sorry, I didn\'t understand that command');
+      print('❌ Unknown command');
     }
   }
 
-  Future<void> _readLapSummary() async {
-    if (_laps.isEmpty) {
-      await _tts.speak('No laps recorded yet');
-      return;
+  Future<void> _speakFast(String text) async {
+    try {
+      await _tts.stop();
+      await _tts.setSpeechRate(1.3);
+      await _tts.speak(text);
+    } catch (e) {
+      print("TTS error: $e");
     }
-
-    setState(() => _isReadingLapSummary = true);
-
-    await _tts.speak('Reading lap summary. ${_laps.length} lap${_laps.length > 1 ? 's' : ''} recorded.');
-
-    for (int i = 0; i < _laps.length && _isReadingLapSummary; i++) {
-      if (!mounted || !_isReadingLapSummary) break;
-
-      final lapNumber = i + 1;
-      final lapTime = _laps[i];
-      final lapDuration = i == 0
-          ? lapTime
-          : Duration(
-          milliseconds: lapTime.inMilliseconds - _laps[i - 1].inMilliseconds);
-
-      final minutes = lapDuration.inMinutes;
-      final seconds = lapDuration.inSeconds.remainder(60);
-
-      String announcement = "Lap $lapNumber: ";
-      if (minutes > 0) {
-        announcement += "$minutes minute${minutes != 1 ? 's' : ''} and $seconds second${seconds != 1 ? 's' : ''}";
-      } else {
-        announcement += "$seconds second${seconds != 1 ? 's' : ''}";
-      }
-
-      await _tts.speak(announcement);
-      await Future.delayed(const Duration(milliseconds: 800));
-    }
-
-    if (mounted && _isReadingLapSummary) {
-      await _tts.speak('End of lap summary');
-      setState(() => _isReadingLapSummary = false);
-    }
-  }
-
-  Future<void> _stopReadingLapSummary() async {
-    setState(() => _isReadingLapSummary = false);
-    await _tts.stop();
-    await _tts.speak('Lap summary stopped');
   }
 
   String _formatTime(Duration duration) {
@@ -293,81 +289,76 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
       return _buildSummaryScreen();
     }
 
-    return WillPopScope(
-      onWillPop: () async {
-        // Stop reading when user exits
-        if (_isReadingLapSummary) {
-          await _stopReadingLapSummary();
-        }
-        _tts.stop();
-        return true;
-      },
-      child: Scaffold(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('Normal Mode', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
-        appBar: AppBar(
-          title: const Text('Normal Mode', style: TextStyle(color: Colors.black)),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          leading: BackButton(
-            color: Colors.black,
-            onPressed: () async {
-              if (_isReadingLapSummary) {
-                await _stopReadingLapSummary();
-              }
-              _tts.stop();
-              Navigator.of(context).pop();
-            },
-          ),
+        elevation: 0,
+        leading: BackButton(
+          color: Colors.black,
+          onPressed: () {
+            // Stop TTS and speech when going back
+            _tts.stop();
+            _speech.cancel();
+            Navigator.of(context).pop();
+          },
         ),
-        body: Column(
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _formatTime(_elapsed),
-                    style: const TextStyle(
-                      fontSize: 80,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'monospace',
-                      color: Colors.black,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Timer Display
+                Text(
+                  _formatTime(_elapsed),
+                  style: const TextStyle(
+                    fontSize: 80,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace',
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 40),
+
+                // Control Buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildControlButton(
+                      label: 'Lap',
+                      icon: Icons.flag,
+                      onPressed: _isRunning ? _lap : null,
+                      color: const Color(0xFF007BFF),
                     ),
-                  ),
-                  const SizedBox(height: 40),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildControlButton(
-                        label: 'Lap',
-                        icon: Icons.flag,
-                        onPressed: _isRunning ? _lap : null,
-                        color: const Color(0xFF007BFF),
-                      ),
-                      const SizedBox(width: 16),
-                      _buildControlButton(
-                        label: _isRunning ? 'Stop' : 'Start',
-                        icon: _isRunning ? Icons.pause : Icons.play_arrow,
-                        onPressed: _isRunning ? _stop : _start,
-                        color: _isRunning ? Colors.orange : Colors.green,
-                      ),
-                      const SizedBox(width: 16),
-                      _buildControlButton(
-                        label: 'Reset',
-                        icon: Icons.refresh,
-                        onPressed: _reset,
-                        color: Colors.red,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 40),
+                    const SizedBox(width: 16),
+                    _buildControlButton(
+                      label: _isRunning ? 'Stop' : 'Start',
+                      icon: _isRunning ? Icons.pause : Icons.play_arrow,
+                      onPressed: _isRunning ? _stop : _start,
+                      color: _isRunning ? Colors.orange : Colors.green,
+                    ),
+                    const SizedBox(width: 16),
+                    _buildControlButton(
+                      label: 'Reset',
+                      icon: Icons.refresh,
+                      onPressed: _reset,
+                      color: Colors.red,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                if (_laps.isNotEmpty)
                   ElevatedButton.icon(
-                    onPressed: _laps.isNotEmpty
-                        ? () => setState(() => _showSummary = true)
-                        : null,
-                    icon: const Icon(Icons.list_alt),
-                    label: Text(
-                        _laps.isEmpty ? 'No Laps Yet' : 'View ${_laps.length} Laps'),
+                    onPressed: () {
+                      setState(() => _showSummary = true);
+                      _stopListening(); // Stop listening when viewing summary
+                    },
+                    icon: const Icon(Icons.list_alt, size: 20),
+                    label: Text('View ${_laps.length} Lap${_laps.length > 1 ? 's' : ''}'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF007BFF),
                       foregroundColor: Colors.white,
@@ -377,220 +368,305 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
                       ),
                     ),
                   ),
-                  if (_isReadingLapSummary) ...[
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF007BFF)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.volume_up, color: Color(0xFF007BFF)),
-                          SizedBox(width: 8),
-                          Text(
-                            'Reading lap summary...',
-                            style: TextStyle(
-                              color: Color(0xFF007BFF),
-                              fontWeight: FontWeight.w600,
-                            ),
+                const SizedBox(height: 32),
+
+                // Mic Button
+                Column(
+                  children: [
+                    Semantics(
+                      label: _isListening
+                          ? 'Voice control active. Tap to stop listening'
+                          : 'Voice control. Tap to start listening for commands',
+                      button: true,
+                      hint: 'Double tap to activate',
+                      child: GestureDetector(
+                        onTap: _toggleListening,
+                        child: Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _isListening ? Colors.red : const Color(0xFF007BFF),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (_isListening ? Colors.red : const Color(0xFF007BFF))
+                                    .withOpacity(0.4),
+                                blurRadius: 20,
+                                spreadRadius: 5,
+                              ),
+                            ],
                           ),
-                        ],
+                          child: Icon(
+                            _isListening ? Icons.mic : Icons.mic_none,
+                            color: Colors.white,
+                            size: 50,
+                          ),
+                        ),
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 100),
-                ],
-              ),
-            ),
-          ],
-        ),
-        bottomSheet: SafeArea(
-          child: GestureDetector(
-            onLongPress: _startListening,
-            onLongPressEnd: (_) => _stopListening(),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              color: _isListening ? Colors.redAccent : const Color(0xFF007BFF),
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 28),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    _isListening ? Icons.mic : Icons.mic_off,
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _isListening
-                        ? "Listening... Release to stop"
-                        : "Hold to Speak",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                    const SizedBox(height: 12),
+                    Text(
+                      _isListening ? '🎤 Listening for commands...' : 'Tap mic to enable voice',
+                      style: TextStyle(
+                        color: _isListening ? Colors.red : Colors.black54,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 8),
+
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'Say: "start" • "stop" • "lap" • "reset"',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+
+                    if (_lastRecognizedCommand.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF007BFF).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFF007BFF).withOpacity(0.3),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Heard:',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.black54,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _lastRecognizedCommand,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF007BFF),
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildSummaryScreen() {
-    return WillPopScope(
-      onWillPop: () async {
-        if (_isReadingLapSummary) {
-          await _stopReadingLapSummary();
-        }
-        return true;
-      },
-      child: Scaffold(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('Lap Summary', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
-        appBar: AppBar(
-          title: const Text('Lap Summary', style: TextStyle(color: Colors.black)),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          leading: BackButton(
-            color: Colors.black,
-            onPressed: () async {
-              if (_isReadingLapSummary) {
-                await _stopReadingLapSummary();
-              }
-              setState(() => _showSummary = false);
-            },
-          ),
-        ),
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                children: [
-                  const Icon(Icons.flag, size: 64, color: Color(0xFF007BFF)),
-                  const SizedBox(height: 12),
-                  Text(
-                    '${_laps.length} Lap${_laps.length > 1 ? 's' : ''} Recorded',
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        elevation: 0,
+        automaticallyImplyLeading: false,
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                const Icon(Icons.flag, size: 64, color: Color(0xFF007BFF)),
+                const SizedBox(height: 12),
+                Text(
+                  '${_laps.length} Lap${_laps.length > 1 ? 's' : ''} Recorded',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Total Time: ${_formatTime(_elapsed)}',
-                    style: const TextStyle(fontSize: 16, color: Colors.black54),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Total Time: ${_formatTime(_elapsed)}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.black54,
+                    fontFamily: 'monospace',
                   ),
-                  if (_isReadingLapSummary) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFF007BFF)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.volume_up, color: Color(0xFF007BFF)),
-                          SizedBox(width: 8),
-                          Text(
-                            'Reading lap summary...',
-                            style: TextStyle(
-                              color: Color(0xFF007BFF),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _laps.length,
-                itemBuilder: (context, index) {
-                  final lapNumber = index + 1;
-                  final lapTime = _laps[index];
-                  final lapDuration = index == 0
-                      ? lapTime
-                      : Duration(
-                      milliseconds:
-                      lapTime.inMilliseconds - _laps[index - 1].inMilliseconds);
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    elevation: 2,
+                ),
+                const SizedBox(height: 16),
+                // Speak Summary Button
+                ElevatedButton.icon(
+                  onPressed: _speakSummary,
+                  icon: const Icon(Icons.volume_up, size: 24),
+                  label: const Text(
+                    'Speak Summary Aloud',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      leading: CircleAvatar(
-                        radius: 24,
-                        backgroundColor: const Color(0xFF007BFF),
-                        child: Text('$lapNumber',
-                            style: const TextStyle(color: Colors.white, fontSize: 18)),
-                      ),
-                      title: Text(
-                        'Total: ${_formatTime(lapTime)}',
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
-                      ),
-                      subtitle: Text(
-                        'Split: ${_formatTime(lapDuration)}',
-                        style: const TextStyle(
-                            fontSize: 14, color: Colors.black54, fontFamily: 'monospace'),
-                      ),
-                    ),
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 100),
-          ],
-        ),
-        bottomSheet: SafeArea(
-          child: GestureDetector(
-            onLongPress: _startListening,
-            onLongPressEnd: (_) => _stopListening(),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              color: _isListening ? Colors.redAccent : const Color(0xFF007BFF),
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 28),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    _isListening ? Icons.mic : Icons.mic_off,
-                    color: Colors.white,
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _laps.length,
+              itemBuilder: (context, index) {
+                final lapNumber = index + 1;
+                final lapTime = _laps[index];
+                final lapDuration = index == 0
+                    ? lapTime
+                    : Duration(
+                    milliseconds: lapTime.inMilliseconds - _laps[index - 1].inMilliseconds);
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _isListening
-                        ? "Listening... Release to stop"
-                        : "Hold to Speak",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(16),
+                    leading: CircleAvatar(
+                      radius: 24,
+                      backgroundColor: const Color(0xFF007BFF),
+                      child: Text(
+                        '$lapNumber',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    title: Text(
+                      'Total: ${_formatTime(lapTime)}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Split: ${_formatTime(lapDuration)}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black54,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    trailing: const Icon(Icons.flag, color: Color(0xFF007BFF)),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    // FIXED: Stop TTS when closing summary
+                    await _tts.stop();
+                    setState(() => _showSummary = false);
+                    // Restart listening after closing summary
+                    if (_isListening) {
+                      _startListening();
+                    }
+                  },
+                  icon: const Icon(Icons.close, size: 24),
+                  label: const Text(
+                    'Close',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF007BFF),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
+  }
+
+  Future<void> _speakSummary() async {
+    if (_laps.isEmpty) {
+      await _tts.speak("No laps recorded");
+      return;
+    }
+
+    String summary = "Lap summary. Total time: ${_formatTimeSpoken(_elapsed)}. ";
+    summary += "You completed ${_laps.length} lap${_laps.length > 1 ? 's' : ''}. ";
+
+    for (int i = 0; i < _laps.length; i++) {
+      final lapNumber = i + 1;
+      final lapTime = _laps[i];
+      final lapDuration = i == 0
+          ? lapTime
+          : Duration(milliseconds: lapTime.inMilliseconds - _laps[i - 1].inMilliseconds);
+
+      summary += "Lap $lapNumber: split time ${_formatTimeSpoken(lapDuration)}, total ${_formatTimeSpoken(lapTime)}. ";
+    }
+
+    await _tts.setSpeechRate(0.9);
+    await _tts.speak(summary);
+  }
+
+  String _formatTimeSpoken(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds.remainder(60);
+    final centiseconds = (duration.inMilliseconds.remainder(1000) ~/ 10);
+
+    if (minutes > 0) {
+      return "$minutes minute${minutes != 1 ? 's' : ''} $seconds second${seconds != 1 ? 's' : ''} and $centiseconds centiseconds";
+    } else if (seconds > 0) {
+      return "$seconds second${seconds != 1 ? 's' : ''} and $centiseconds centiseconds";
+    } else {
+      return "$centiseconds centiseconds";
+    }
   }
 
   Widget _buildControlButton({
@@ -605,15 +681,20 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
         backgroundColor: color,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        disabledBackgroundColor: Colors.grey.shade300,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 24),
           const SizedBox(height: 4),
-          Text(label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );

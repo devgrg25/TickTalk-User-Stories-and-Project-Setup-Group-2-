@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'routine_timer_model.dart';
-import 'widgets/global_scaffold.dart'; // ✅ Global scaffold for mic bar
+import 'routine_timer_model.dart'; // To access the NEW TimerData class
 
 class CountdownScreenV extends StatefulWidget {
   final TimerDataV timerData;
@@ -10,20 +9,20 @@ class CountdownScreenV extends StatefulWidget {
   const CountdownScreenV({super.key, required this.timerData});
 
   @override
-  State<CountdownScreenV> createState() => _CountdownScreenVState();
+  State<CountdownScreenV> createState() => _CountdownScreenState();
 }
 
-class _CountdownScreenVState extends State<CountdownScreenV> {
+class _CountdownScreenState extends State<CountdownScreenV> {
   late Timer _timer;
   int _currentSeconds = 0;
   int _elapsedTotalSeconds = 0;
-  int _currentStepIndex = 0;
+  int _currentStepIndex = 0; // <-- REPLACED _currentPhase
 
   bool _isPaused = false;
   bool _audioFeedbackOn = true;
   bool _hapticFeedbackOn = true;
 
-  // --- Helpers ---
+  // Helper getters for clarity
   TimerStep get _currentStep => widget.timerData.steps[_currentStepIndex];
   int get _totalSteps => widget.timerData.steps.length;
   int get _totalDurationInSeconds => widget.timerData.totalTime * 60;
@@ -41,20 +40,25 @@ class _CountdownScreenVState extends State<CountdownScreenV> {
   }
 
   void _startStep() {
+    // Set the timer for the current step's duration
     _currentSeconds = _currentStep.durationInMinutes * 60;
     _startTimer();
   }
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted || _isPaused) return;
+      if (!mounted) return;
 
+      if (_isPaused) return;
+
+      // Timer tick logic
       setState(() {
         _elapsedTotalSeconds++;
 
         if (_currentSeconds > 0) {
           _currentSeconds--;
         } else {
+          // Current step finished, move to the next
           _timer.cancel();
           _nextStep();
         }
@@ -63,29 +67,36 @@ class _CountdownScreenVState extends State<CountdownScreenV> {
   }
 
   void _nextStep() {
+    // Check if there are more steps
     if (_currentStepIndex < _totalSteps - 1) {
-      setState(() => _currentStepIndex++);
-      _startStep();
+      // Move to the next step
+      setState(() {
+        _currentStepIndex++;
+      });
+      _startStep(); // Start the new step's timer
     } else {
+      // This was the last step. Timer is finished.
       Navigator.of(context).pop();
     }
   }
 
   String _formatTime(int totalSeconds) {
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds % 60;
+    int minutes = totalSeconds ~/ 60;
+    int seconds = totalSeconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
+    // --- UI Colors ---
     const Color primaryBlue = Color(0xFF007BFF);
     const Color cardBackground = Color(0xFFF9FAFB);
     const Color cardBorder = Color(0xFFE5E7EB);
     const Color textColor = Colors.black;
     const Color subtextColor = Colors.black54;
 
-    return GlobalScaffold(
+    return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -93,74 +104,63 @@ class _CountdownScreenVState extends State<CountdownScreenV> {
         centerTitle: true,
         leading: const BackButton(color: textColor),
       ),
-
-      // ✅ FIXED: Use child instead of body
-      child: Padding(
+      body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // --- Current Timer Card ---
+            // "Current Timer" card
             Card(
               elevation: 0,
               color: cardBackground,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: cardBorder),
-              ),
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: cardBorder)),
               child: ListTile(
-                title: const Text('Current Timer',
-                    style: TextStyle(fontSize: 12, color: subtextColor)),
+                title: const Text('Current Timer', style: TextStyle(fontSize: 12, color: subtextColor)),
                 subtitle: Text(
                   widget.timerData.name,
                   style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textColor),
                 ),
               ),
             ),
             const SizedBox(height: 24),
 
-            // --- Main Timer Display ---
+            // Main timer display card
             Card(
               elevation: 0,
               color: cardBackground,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: cardBorder),
-              ),
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: cardBorder)),
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 32.0),
                 child: Column(
                   children: [
                     Text(
-                      'Step ${_currentStepIndex + 1} of $_totalSteps: '
-                          '${_currentStep.name.toUpperCase()}',
+                      'Step ${_currentStepIndex + 1} of $_totalSteps: ${_currentStep.name.toUpperCase()}', // <-- UPDATED
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: textColor.withOpacity(0.7),
-                      ),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: textColor.withOpacity(0.7)),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       _formatTime(_currentSeconds),
                       style: const TextStyle(
-                        fontSize: 80,
-                        fontWeight: FontWeight.bold,
-                        color: textColor,
-                      ),
+                          fontSize: 80,
+                          fontWeight: FontWeight.bold,
+                          color: textColor),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / '
-                          'Total: ${_formatTime(_totalDurationInSeconds)}',
+                      'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(_totalDurationInSeconds)}',
                       style: TextStyle(
-                        fontSize: 16,
-                        color: textColor.withOpacity(0.7),
-                      ),
+                          fontSize: 16,
+                          color: textColor.withOpacity(0.7)),
                     ),
                   ],
                 ),
@@ -168,14 +168,13 @@ class _CountdownScreenVState extends State<CountdownScreenV> {
             ),
             const SizedBox(height: 24),
 
-            // --- Feedback Controls ---
+            // Feedback controls card
             Card(
               elevation: 0,
               color: cardBackground,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: cardBorder),
-              ),
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: cardBorder)),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                 child: Row(
@@ -185,15 +184,17 @@ class _CountdownScreenVState extends State<CountdownScreenV> {
                       icon: Icons.volume_up_outlined,
                       label: 'Audio Feedback',
                       isOn: _audioFeedbackOn,
-                      onChanged: (value) =>
-                          setState(() => _audioFeedbackOn = value),
+                      onChanged: (value) {
+                        setState(() => _audioFeedbackOn = value);
+                      },
                     ),
                     _buildFeedbackToggle(
                       icon: Icons.vibration_outlined,
                       label: 'Haptic Feedback',
                       isOn: _hapticFeedbackOn,
-                      onChanged: (value) =>
-                          setState(() => _hapticFeedbackOn = value),
+                      onChanged: (value) {
+                        setState(() => _hapticFeedbackOn = value);
+                      },
                     ),
                   ],
                 ),
@@ -202,12 +203,14 @@ class _CountdownScreenVState extends State<CountdownScreenV> {
 
             const Spacer(),
 
-            // --- Pause / Resume Button ---
+            // Pause/Resume button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  setState(() => _isPaused = !_isPaused);
+                  setState(() {
+                    _isPaused = !_isPaused;
+                  });
                 },
                 icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause, size: 24),
                 label: Text(
@@ -225,13 +228,13 @@ class _CountdownScreenVState extends State<CountdownScreenV> {
               ),
             ),
             const SizedBox(height: 16),
-            // 👇 Mic button handled globally
           ],
         ),
       ),
     );
   }
 
+  // Helper widget for the feedback toggles
   Widget _buildFeedbackToggle({
     required IconData icon,
     required String label,
@@ -243,7 +246,10 @@ class _CountdownScreenVState extends State<CountdownScreenV> {
 
     return Column(
       children: [
-        Icon(icon, color: isOn ? primaryBlue : inactiveGrey),
+        Icon(
+          icon,
+          color: isOn ? primaryBlue : inactiveGrey,
+        ),
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
         Switch(
           value: isOn,

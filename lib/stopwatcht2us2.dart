@@ -2,9 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
-import 'widgets/global_scaffold.dart'; // ✅ Use global mic wrapper
 
 class StopwatchT2US2 extends StatefulWidget {
   const StopwatchT2US2({
@@ -13,6 +13,7 @@ class StopwatchT2US2 extends StatefulWidget {
     this.onTutorialFinish,
   });
 
+  // optional tutorial hooks (non-breaking)
   final bool tutorialMode;
   final VoidCallback? onTutorialFinish;
 
@@ -27,8 +28,10 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
   late Ticker _ticker;
   bool _isRunning = false;
 
-  // ✅ Only TTS (Global mic handles SST)
+  // Voice and TTS
+  final stt.SpeechToText _speech = stt.SpeechToText();
   final FlutterTts _tts = FlutterTts();
+  bool _isListening = false;
 
   // Lap tracking
   List<Duration> _laps = [];
@@ -43,7 +46,13 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
     _stopwatch = Stopwatch();
     _elapsed = Duration.zero;
     _ticker = createTicker(_onTick);
+    _initSpeech();
     _initTts();
+    // ✅ REMOVED: _start(); - No auto-start
+  }
+
+  void _initSpeech() async {
+    await _speech.initialize();
   }
 
   void _initTts() async {
@@ -60,6 +69,7 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
     }
   }
 
+  // ✅ Announce time every 30 seconds
   void _checkTimeAnnouncement() {
     final currentSeconds = _elapsed.inSeconds;
     final lastAnnouncedSeconds = _lastAnnouncedTime.inSeconds;
@@ -78,8 +88,7 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
 
     String announcement;
     if (minutes > 0) {
-      announcement =
-      "$minutes minute${minutes != 1 ? 's' : ''} and $seconds second${seconds != 1 ? 's' : ''}";
+      announcement = "$minutes minute${minutes != 1 ? 's' : ''} and $seconds second${seconds != 1 ? 's' : ''}";
     } else {
       announcement = "$seconds second${seconds != 1 ? 's' : ''}";
     }
@@ -91,6 +100,7 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
   void dispose() {
     _ticker.dispose();
     _stopwatch.stop();
+    _speech.cancel();
     _tts.stop();
     _announcementTimer?.cancel();
     super.dispose();
@@ -101,7 +111,6 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
       _stopwatch.start();
       _ticker.start();
       setState(() => _isRunning = true);
-      _tts.speak('Stopwatch started');
     }
   }
 
@@ -110,7 +119,6 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
       _stopwatch.stop();
       _ticker.stop();
       setState(() => _isRunning = false);
-      _tts.speak('Stopwatch stopped');
     }
   }
 
@@ -119,7 +127,6 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
     _laps.clear();
     _lastAnnouncedTime = Duration.zero;
     setState(() => _elapsed = Duration.zero);
-    _tts.speak('Stopwatch reset');
   }
 
   void _lap() {
@@ -127,7 +134,6 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
       setState(() {
         _laps.add(_elapsed);
       });
-      _tts.speak('Lap recorded');
     }
   }
 
@@ -136,7 +142,38 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
       _stopwatch.start();
       _ticker.start();
       setState(() => _isRunning = true);
-      _tts.speak('Stopwatch resumed');
+    }
+  }
+
+  // ✅ Voice Command Handling
+  void _toggleListening() async {
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+    } else {
+      setState(() => _isListening = true);
+      await _speech.listen(
+        onResult: (result) {
+          final command = result.recognizedWords.toLowerCase();
+          _handleVoiceCommand(command);
+        },
+      );
+    }
+  }
+
+  void _handleVoiceCommand(String command) {
+    if (command.contains('start')) {
+      _start();
+      _tts.speak('Stopwatch started');
+    } else if (command.contains('stop')) {
+      _stop();
+      _tts.speak('Stopwatch stopped');
+    } else if (command.contains('lap')) {
+      _lap();
+      _tts.speak('Lap recorded');
+    } else if (command.contains('reset')) {
+      _reset();
+      _tts.speak('Stopwatch reset');
     }
   }
 
@@ -154,14 +191,26 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
 
   @override
   Widget build(BuildContext context) {
-    return GlobalScaffold( // ✅ Global mic active
+    return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Stopwatch', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: const BackButton(color: Colors.black),
+        actions: [
+          // ✅ Mic Button in AppBar
+          IconButton(
+            icon: Icon(
+              _isListening ? Icons.mic : Icons.mic_off,
+              color: _isListening ? Colors.red : Colors.black,
+            ),
+            onPressed: _toggleListening,
+            tooltip: _isListening ? 'Stop listening' : 'Tap to speak',
+          ),
+        ],
       ),
-      child: Padding(
+      body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
@@ -258,7 +307,8 @@ class _StopwatchT2US2State extends State<StopwatchT2US2>
       icon: Icon(icon, size: 24),
       label: Text(
         label,
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        style:
+        const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: color,

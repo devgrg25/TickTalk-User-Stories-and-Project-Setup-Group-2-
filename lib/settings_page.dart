@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'welcome_page.dart'; // ✅ Correct import
-import 'widgets/global_scaffold.dart'; // ✅ Add this for mic bar
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -27,40 +26,33 @@ class SettingsPage extends StatelessWidget {
     await prefs.setBool('hasSeenWelcome', false);
 
     if (context.mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const WelcomePage()),
-            (route) => false, // Clears all previous routes
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const WelcomePage()),
+            (route) => false,
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GlobalScaffold( // ✅ Use GlobalScaffold for persistent mic
+    return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: const BackButton(color: Colors.black),
+        title: const Text('Settings'),
       ),
-      child: ListView(
-        padding: const EdgeInsets.all(16),
+      body: ListView(
         children: [
           ListTile(
             title: const Text('Rerun Tutorial on Next Start'),
             subtitle: const Text('See the introductory guide again next time.'),
-            leading: const Icon(Icons.replay, color: Colors.blueAccent),
+            leading: const Icon(Icons.replay),
             onTap: () => _rerunTutorial(context),
           ),
-          const Divider(),
           ListTile(
             title: const Text('Go to Welcome Screen Now'),
             subtitle: const Text('Return immediately to the welcome/tutorial.'),
-            leading: const Icon(Icons.play_circle_fill, color: Colors.blueAccent),
+            leading: const Icon(Icons.play_circle_fill),
             onTap: () => _goToWelcomeScreen(context),
           ),
-          const SizedBox(height: 100), // space above mic bar
         ],
       ),
     );

@@ -1,5 +1,7 @@
+// timer_model.dart
+
 class TimerData {
-  final String id;
+  final String id; // Unique ID for each timer
   final String name;
   final int totalTime;
   final int workInterval;
@@ -16,26 +18,6 @@ class TimerData {
     required this.totalSets,
     required this.currentSet,
   });
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'totalTime': totalTime,
-    'workInterval': workInterval,
-    'breakInterval': breakInterval,
-    'totalSets': totalSets,
-    'currentSet': currentSet,
-  };
-
-  factory TimerData.fromJson(Map<String, dynamic> json) => TimerData(
-    id: json['id'],
-    name: json['name'],
-    totalTime: json['totalTime'],
-    workInterval: json['workInterval'],
-    breakInterval: json['breakInterval'],
-    totalSets: json['totalSets'],
-    currentSet: json['currentSet'],
-  );
 
   TimerData copyWith({
     String? id,
@@ -57,15 +39,25 @@ class TimerData {
     );
   }
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-          other is TimerData && runtimeType == other.runtimeType && id == other.id;
+  // Method to convert a TimerData instance to a JSON map
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'totalTime': totalTime,
+    'workInterval': workInterval,
+    'breakInterval': breakInterval,
+    'totalSets': totalSets,
+    'currentSet': currentSet,
+  };
 
-  @override
-  int get hashCode => id.hashCode;
-
-  @override
-  String toString() =>
-      'TimerData(name: $name, totalTime: $totalTime, currentSet: $currentSet/$totalSets)';
+  // Factory constructor to create a TimerData instance from a JSON map
+  factory TimerData.fromJson(Map<String, dynamic> json) => TimerData(
+    id: json['id'],
+    name: json['name'],
+    totalTime: json['totalTime'],
+    workInterval: json['workInterval'],
+    breakInterval: json['breakInterval'],
+    totalSets: json['totalSets'],
+    currentSet: json['currentSet']
+  );
 }
