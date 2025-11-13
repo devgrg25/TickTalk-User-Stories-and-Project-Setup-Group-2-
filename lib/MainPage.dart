@@ -27,11 +27,13 @@ class _MainPageState extends State<MainPage> {
   int _tabIndex = 0;
   bool _showingCountdown = false;
   bool _isListening = false;
-  //tutorial variables
+
+  // Tutorial variables
   bool tutorialActive = false;
   bool tutorialPaused = false;
   int tutorialStep = 0;
-  //create timer variables
+
+  // Create timer variables
   TimerData? _editingTimer;
   TimerData? _activeTimer;
   Timer? _ticker;
@@ -45,6 +47,9 @@ class _MainPageState extends State<MainPage> {
   TimerData? _voiceFilledTimer;
 
   static const String _timersKey = 'saved_timers_list';
+
+  // --- 1. DEFINE THE GLOBAL KEY FOR ROUTINES PAGE ---
+  final GlobalKey<RoutinesPageState> _routinesKey = GlobalKey<RoutinesPageState>();
 
   // ---------- INIT / DISPOSE ----------
   @override
@@ -75,7 +80,6 @@ class _MainPageState extends State<MainPage> {
       // swallow; device/engine variance
     }
   }
-
 
   void _pauseTimer() {
     if (_ticker == null) return;
@@ -118,20 +122,15 @@ class _MainPageState extends State<MainPage> {
     _speak("Timer stopped.");
   }
 
-
   String _generateUniqueTimerName(List<TimerData> timers) {
     int counter = 1;
-
     while (true) {
       final name = "Timer $counter";
       final exists = timers.any((t) => t.name == name);
-
       if (!exists) return name;
-
       counter++;
     }
   }
-
 
   @override
   void dispose() {
@@ -267,7 +266,7 @@ class _MainPageState extends State<MainPage> {
         return;
       }
 
-      // Basic single-phase countdown (work/break logic can be layered later)
+      // Basic single-phase countdown
       final current = _activeTimer!;
       final remaining = current.totalTime;
 
@@ -319,9 +318,7 @@ class _MainPageState extends State<MainPage> {
 
     // CASE 0: Tutorial is active → only listen for skip / resume
     if (tutorialActive) {
-      debugPrint('Case 0');
-      setState(() => _isListening = true);
-
+      debugPrint('Case 0 - Tutorial');
       await _voiceController.startListeningRaw(
         onCommand: (String heard) async {
           final words = heard.toLowerCase().trim();
@@ -342,17 +339,15 @@ class _MainPageState extends State<MainPage> {
           _runTutorial();
         },
       );
-
-      return; //STOP HERE (do NOT allow timer voice logic)
+      return; //STOP HERE
     }
 
-    // CASE 1: There is an active timer → listen for pause/resume/stop
+    // CASE 1: Active Timer → Control (Pause/Stop/Resume)
     if (_activeTimer != null) {
-      debugPrint('Case 1');
+      debugPrint('Case 1 - Active Timer');
       await _voiceController.startListeningForControl(
         onCommand: (cmd) async {
           setState(() => _isListening = false);
-
           final words = cmd.toLowerCase();
           debugPrint(words);
 
@@ -372,15 +367,28 @@ class _MainPageState extends State<MainPage> {
       return;
     }
 
-    // CASE 2: No timer active → treat as timer creation command
+    // CASE 2: ROUTINES TAB IS ACTIVE (Index 2)
+    // --- 3. ROUTE VOICE COMMANDS TO ROUTINES PAGE ---
+    if (_tabIndex == 2) {
+      debugPrint('Case 2 - Routines Tab');
+      await _voiceController.startListeningRaw(
+        onCommand: (String cmd) async {
+          setState(() => _isListening = false);
+          // Pass the raw text string to the Routines Page
+          _routinesKey.currentState?.handleVoiceCommand(cmd);
+        },
+      );
+      return;
+    }
+
+    // CASE 3: No active timer & Not on Routines tab → Default to Create Timer
+    debugPrint('Case 3 - Create Timer');
     await _voiceController.startListeningForTimer(
       onCommand: (ParsedVoiceCommand data) async {
         await _voiceController.stopListening();
-        debugPrint('Case 2');
+
         if (!mounted) return;
         setState(() => _isListening = false);
-
-        //await _voiceController.speak("Creating timer.");
 
         final work = data.workMinutes ?? data.simpleTimerMinutes ?? 0;
         final sets = data.sets ?? 1;
@@ -443,7 +451,6 @@ class _MainPageState extends State<MainPage> {
     if (!mounted || tutorialPaused == true) return;
 
     switch (tutorialStep) {
-
     // STEP 0 — Create Timer Page
       case 0:
         setState(() => _tabIndex = 1);
@@ -528,7 +535,13 @@ class _MainPageState extends State<MainPage> {
       onSaveTimer: _handleSaveTimer,
       startVoiceConfirmation: (_voiceFilledTimer != null && _editingTimer == null),
     ),
-    RoutinesPage(routines: _routines),
+
+    // --- 2. PASS THE KEY TO ROUTINES PAGE ---
+    RoutinesPage(
+        key: _routinesKey,
+        routines: _routines
+    ),
+
     const Placeholder(), // Activity page
     const StopwatchModeSelector(),
   ];
