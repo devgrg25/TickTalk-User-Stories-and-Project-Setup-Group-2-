@@ -359,6 +359,8 @@ class _MainPageState extends State<MainPage> {
             _resumeTimer();
           } else if (words.contains("stop") || words.contains("end")) {
             _stopTimer();
+          } else if (words.contains("timer")) {
+            _voiceController.speak("Please stop the current timer before running new timer");
           } else {
             _voiceController.speak("Command not recognized while timer is running.");
           }
@@ -413,6 +415,15 @@ class _MainPageState extends State<MainPage> {
           _voiceFilledTimer = timerData;
           _tabIndex = 1; // switch to Create screen
         });
+      },
+      onUnrecognized: (spoken) async {
+        if (spoken == "incomplete") {
+          await _voiceController.speak(
+              "Please tell me the timer length. For example, say 'start a 5 minute timer'."
+          );
+        } else {
+          await _voiceController.speak("Sorry, I didn't understand that.");
+        }
       },
     );
   }
