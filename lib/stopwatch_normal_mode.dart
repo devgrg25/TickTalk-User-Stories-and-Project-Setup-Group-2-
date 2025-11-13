@@ -161,13 +161,7 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
     }
   }
 
-  void _toggleListening() async {
-    if (_isListening) {
-      await _stopListening();
-    } else {
-      await _startListening();
-    }
-  }
+  // ✅ REMOVED: _toggleListening() - no longer needed
 
   Future<void> _startListening() async {
     // Stop any ongoing TTS first
@@ -495,32 +489,84 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
                         margin: const EdgeInsets.symmetric(horizontal: 20),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF007BFF).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          color: _isListening
+                              ? Colors.red.withOpacity(0.1)
+                              : const Color(0xFF007BFF).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: const Color(0xFF007BFF).withOpacity(0.3),
+                            color: _isListening
+                                ? Colors.red.withOpacity(0.3)
+                                : const Color(0xFF007BFF).withOpacity(0.3),
+                            width: 2,
                           ),
                         ),
                         child: Column(
                           children: [
-                            const Text(
-                              'Heard:',
+                            Icon(
+                              _isListening ? Icons.mic : Icons.mic_none,
+                              color: _isListening ? Colors.red : const Color(0xFF007BFF),
+                              size: 48,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _isListening
+                                  ? '🎤 Listening for commands...'
+                                  : 'Tap mic bar below to enable voice',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.black54,
+                                color: _isListening ? Colors.red : Colors.black87,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _lastRecognizedCommand,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF007BFF),
-                                fontWeight: FontWeight.bold,
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
                               ),
-                              textAlign: TextAlign.center,
+                              child: Text(
+                                'Say: "start" • "stop" • "lap" • "reset"',
+                                style: TextStyle(
+                                  color: Colors.grey.shade700,
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
                             ),
+                            if (_lastRecognizedCommand.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Text(
+                                      'Heard:',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.black54,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _lastRecognizedCommand,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF007BFF),
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -576,6 +622,42 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
                   ),
                 ],
               ),
+            ),
+          ),
+        ),
+      ),
+      // ✅ NEW: Add bottom mic bar directly in this page
+      bottomNavigationBar: GestureDetector(
+        onTap: () async {
+          if (_isListening) {
+            await _stopListening();
+          } else {
+            await _startListening();
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          color: _isListening ? Colors.redAccent : const Color(0xFF007BFF),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 28),
+          child: SafeArea(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  _isListening ? Icons.mic : Icons.mic_off,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _isListening ? "Listening... Tap to stop" : "Tap to Speak",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
