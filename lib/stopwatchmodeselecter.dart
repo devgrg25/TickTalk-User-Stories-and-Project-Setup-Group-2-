@@ -14,63 +14,63 @@ class StopwatchModeSelector extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.timer_outlined,
-              size: 80,
-              color: Color(0xFF007BFF),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Choose Stopwatch Mode',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.timer_outlined,
+                size: 80,
+                color: Color(0xFF007BFF),
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Select how you want to use the stopwatch',
-              style: TextStyle(fontSize: 16, color: Colors.black54),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 48),
+              const SizedBox(height: 24),
+              const Text(
+                'Choose Stopwatch Mode',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Select how you want to use the stopwatch',
+                style: TextStyle(fontSize: 16, color: Colors.black54),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 48),
 
-            // Normal Mode Button
-            _buildModeCard(
-              context,
-              title: 'Normal Mode',
-              description: 'Single stopwatch with voice control',
-              icon: Icons.timer,
-              color: const Color(0xFF007BFF),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const StopwatchNormalMode(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
+              _buildModeCard(
+                context,
+                title: 'Normal Mode',
+                description: 'Single stopwatch with voice control',
+                icon: Icons.timer,
+                color: const Color(0xFF007BFF),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const StopwatchNormalMode(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
 
-            // Player Mode Button
-            _buildModeCard(
-              context,
-              title: 'Player Mode',
-              description: 'Track up to 6 players simultaneously',
-              icon: Icons.groups,
-              color: Colors.green,
-              onTap: () {
-                _showPlayerCountDialog(context);
-              },
-            ),
-          ],
+              _buildModeCard(
+                context,
+                title: 'Player Mode',
+                description: 'Track up to 6 players simultaneously',
+                icon: Icons.groups,
+                color: Colors.green,
+                onTap: () {
+                  _showPlayerCountDialog(context);
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

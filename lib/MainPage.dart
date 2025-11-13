@@ -31,7 +31,7 @@ class _MainPageState extends State<MainPage> {
   bool tutorialActive = false;
   bool tutorialPaused = false;
   int tutorialStep = 0;
-
+  //create timer variables
   TimerData? _editingTimer;
   TimerData? _activeTimer;
   Timer? _ticker;
@@ -186,6 +186,7 @@ class _MainPageState extends State<MainPage> {
   void _editTimer(TimerData timerToEdit) {
     setState(() {
       _editingTimer = timerToEdit;
+      _voiceFilledTimer = null;   // prevent voice timer from overwriting edit data
       _tabIndex = 1;
     });
   }
@@ -316,8 +317,9 @@ class _MainPageState extends State<MainPage> {
     if (_isListening) return;
     setState(() => _isListening = true);
 
-    // ✅ CASE 0: Tutorial is active → only listen for skip / resume
+    // CASE 0: Tutorial is active → only listen for skip / resume
     if (tutorialActive) {
+      debugPrint('Case 0');
       setState(() => _isListening = true);
 
       await _voiceController.startListeningRaw(
@@ -325,7 +327,7 @@ class _MainPageState extends State<MainPage> {
           final words = heard.toLowerCase().trim();
           setState(() => _isListening = false);
 
-          // ✅ SKIP / END tutorial commands
+          //SKIP / END tutorial commands
           if (words.contains("skip") ||
               words.contains("stop tutorial") ||
               words.contains("end tutorial") ||
@@ -335,17 +337,18 @@ class _MainPageState extends State<MainPage> {
             return;
           }
 
-          // ✅ No skip → Resume tutorial where it left off
+          //No skip → Resume tutorial where it left off
           setState(() => tutorialPaused = false);
           _runTutorial();
         },
       );
 
-      return; // ✅ STOP HERE (do NOT allow timer voice logic)
+      return; //STOP HERE (do NOT allow timer voice logic)
     }
 
     // CASE 1: There is an active timer → listen for pause/resume/stop
     if (_activeTimer != null) {
+      debugPrint('Case 1');
       await _voiceController.startListeningForControl(
         onCommand: (cmd) async {
           setState(() => _isListening = false);
@@ -361,6 +364,8 @@ class _MainPageState extends State<MainPage> {
             _resumeTimer();
           } else if (words.contains("stop") || words.contains("end")) {
             _stopTimer();
+          } else if (words.contains("timer")) {
+            _voiceController.speak("Please stop the current timer before running new timer");
           } else {
             _voiceController.speak("Command not recognized while timer is running.");
           }
@@ -373,10 +378,9 @@ class _MainPageState extends State<MainPage> {
     await _voiceController.startListeningForTimer(
       onCommand: (ParsedVoiceCommand data) async {
         await _voiceController.stopListening();
+        debugPrint('Case 2');
         if (!mounted) return;
         setState(() => _isListening = false);
-
-        await _voiceController.speak("Creating timer.");
 
         final work = data.workMinutes ?? data.simpleTimerMinutes ?? 0;
         final sets = data.sets ?? 1;
@@ -397,9 +401,19 @@ class _MainPageState extends State<MainPage> {
 
         if (!mounted) return;
         setState(() {
+          _editingTimer = null;
           _voiceFilledTimer = timerData;
           _tabIndex = 1; // switch to Create screen
         });
+      },
+      onUnrecognized: (spoken) async {
+        if (spoken == "incomplete") {
+          await _voiceController.speak(
+              "Please tell me the timer length. For example, say 'start a 5 minute timer'."
+          );
+        } else {
+          await _voiceController.speak("Sorry, I didn't understand that.");
+        }
       },
     );
   }
@@ -521,6 +535,7 @@ class _MainPageState extends State<MainPage> {
       key: ValueKey(_voiceFilledTimer?.id ?? 'create_static'),
       existingTimer: _editingTimer ?? _voiceFilledTimer,
       onSaveTimer: _handleSaveTimer,
+      startVoiceConfirmation: (_voiceFilledTimer != null && _editingTimer == null),
     ),
     RoutinesPage(routines: _routines),
     const Placeholder(), // Activity page
