@@ -28,6 +28,9 @@ Say “start tutorial” to begin, “skip” to continue to the app, or “repe
 Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
 ''';
 
+  static const String _skipHint =
+      'You can skip this tutorial at any time by pressing the Skip Tutorial button at the bottom.';
+
   @override
   void initState() {
     super.initState();
@@ -100,6 +103,29 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
   Future<void> _setSeen() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hasSeenWelcome', true);
+  }
+
+  // Push any page with a bottom "Skip Tutorial" bar (same size/spot as mic bar)
+  void _pushWithSkipOverlay(Widget child) {
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _TutorialOverlayPage(
+          child: child,
+          onSkip: () async {
+            try {
+              await _speech.stop();
+              await _tts.stop();
+            } catch (_) {}
+            if (!mounted) return;
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const HomeScreen()),
+                  (route) => false,
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _handle(String words) async {
@@ -255,6 +281,64 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
           ],
         ),
       ),
+    );
+  }
+}
+
+///
+/// Slim overlay that adds a bottom "Skip Tutorial" bar over any screen
+/// without covering the rest of the UI. Same spot/size as your mic bar.
+///
+class _TutorialOverlayPage extends StatelessWidget {
+  final Widget child;
+  final Future<void> Function() onSkip;
+
+  const _TutorialOverlayPage({
+    required this.child,
+    required this.onSkip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // Underlying page content (e.g., a full Scaffold)
+        Positioned.fill(child: child),
+
+        // Bottom "Skip Tutorial" bar (same dimensions as mic bar)
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: SafeArea(
+            top: false,
+            child: GestureDetector(
+              onTap: onSkip,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 28),
+                color: const Color(0xFF007BFF),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.skip_next, color: Colors.white),
+                    SizedBox(width: 8),
+                    Text(
+                      'Skip Tutorial',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -30,6 +30,10 @@ class _MainPageState extends State<MainPage> {
 
   /// Global mic state
   bool _isListening = false;
+  //tutorial variables
+  bool tutorialActive = false;
+  bool tutorialPaused = false;
+  int tutorialStep = 0;
 
   /// Tutorial lock — while true, mic only accepts “skip” and we won’t run creation/navigation voice flows
   bool _tutorialActive = false;
@@ -379,6 +383,89 @@ class _MainPageState extends State<MainPage> {
       if (mounted) setState(() => _isListening = false);
     }
   }
+  //-----------Tutorial functions----------------
+  void _endTutorial() async {
+    setState(() {
+      tutorialActive = false;
+      tutorialPaused = false;
+    });
+
+    await _tts.stop();
+    await _speakWait("Tutorial skipped. You can now explore the app freely.");
+  }
+
+  void _startTutorial() {
+    setState(() {
+      tutorialActive = true;
+      tutorialPaused = false;
+      tutorialStep = 0;
+    });
+    _runTutorial();
+  }
+
+  Future<void> _runTutorial() async {
+    if (!mounted || tutorialPaused == true) return;
+
+    switch (tutorialStep) {
+
+    // STEP 0 — Create Timer Page
+      case 0:
+        setState(() => _tabIndex = 1);
+        await _speakWait(
+            'This is the timer creation page. Here is a step by step guide on how to use it. '
+                'One: enter a timer name. Two: set work minutes. Three: set break minutes. Four: set the number of sets. '
+                'You can also say: Start a study timer for four sets with twenty five minutes work and five minutes break.'
+        );
+        tutorialStep++;
+        break;
+
+    // STEP 1 — Stopwatch Selector
+      case 1:
+        setState(() => _tabIndex = 4);
+        await _speakWait(
+            'This is the stopwatch selector. Choose Normal Mode for a single stopwatch with voice control, '
+                'or Player Mode to track up to six players.'
+        );
+        tutorialStep++;
+        break;
+
+    // STEP 2 — Normal Mode Page
+      case 2:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const StopwatchNormalMode(autoStart: false)),
+        );
+        await Future.delayed(const Duration(milliseconds: 200));
+        await _speakWait(
+            'This is Normal Mode. Say start to begin, stop to pause, lap to mark a lap, and reset to clear it.'
+        );
+        tutorialStep++;
+        break;
+
+    // TUTORIAL DONE
+      default:
+        tutorialActive = false;
+        await _speakWait("Tutorial complete. You can now explore the app freely.");
+        break;
+    }
+
+    // Continue automatically unless paused
+    if (tutorialActive && !tutorialPaused) {
+      _runTutorial();
+    }
+  }
+  Future<void> _speakWait(String text) async {
+    await _tts.stop();
+    await _tts.setSpeechRate(0.45);
+    await _tts.awaitSpeakCompletion(true);
+    await _tts.speak(text);
+
+    // Wait here if paused (speech will be frozen)
+    while (tutorialPaused) {
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
 
   // ---------------------- UI helpers ----------------------
   void _switchTab(int index) {
