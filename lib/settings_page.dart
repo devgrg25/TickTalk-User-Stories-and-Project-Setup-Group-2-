@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'welcome_page.dart'; // ✅ Correct import
+import 'font_scale.dart';  // 👈 fixed import
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -40,7 +41,43 @@ class SettingsPage extends StatelessWidget {
         title: const Text('Settings'),
       ),
       body: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
+          // 🔹 TEXT SIZE SECTION
+          const ListTile(
+            leading: Icon(Icons.text_fields),
+            title: Text('Text Size'),
+            subtitle: Text('Adjust app-wide text size for better readability.'),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      await FontScale.instance.decrease10();
+                    },
+                    icon: const Icon(Icons.text_decrease),
+                    label: const Text('Smaller'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      await FontScale.instance.increase10();
+                    },
+                    icon: const Icon(Icons.text_increase),
+                    label: const Text('Bigger'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
+
+          // Existing tutorial options
           ListTile(
             title: const Text('Rerun Tutorial on Next Start'),
             subtitle: const Text('See the introductory guide again next time.'),

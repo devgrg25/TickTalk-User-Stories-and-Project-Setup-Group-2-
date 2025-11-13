@@ -14,6 +14,7 @@ import 'voice_controller.dart';
 import 'routine_timer_model.dart';
 import 'routines.dart';
 import 'routines_page.dart';
+import 'font_scale.dart';
 
 class MainPage extends StatefulWidget {
   final bool tutorialMode;
@@ -185,7 +186,7 @@ class _MainPageState extends State<MainPage> {
   void _editTimer(TimerData timerToEdit) {
     setState(() {
       _editingTimer = timerToEdit;
-      _voiceFilledTimer = null;   // prevent voice timer from overwriting edit data
+      _voiceFilledTimer = null; // prevent voice timer from overwriting edit data
       _tabIndex = 1;
     });
   }
@@ -216,6 +217,31 @@ class _MainPageState extends State<MainPage> {
     } catch (e) {
       debugPrint("TTS error: $e");
     }
+  }
+
+  // ---------- FONT VOICE COMMANDS ----------
+  Future<bool> _handleVoiceFontCommand(String words) async {
+    final w = words.toLowerCase();
+
+    if (w.contains('increase font') ||
+        w.contains('bigger font') ||
+        w.contains('bigger text') ||
+        w.contains('increase text')) {
+      await FontScale.instance.increase10();
+      await _voiceController.speak("Increasing text size.");
+      return true;
+    }
+
+    if (w.contains('decrease font') ||
+        w.contains('smaller font') ||
+        w.contains('smaller text') ||
+        w.contains('reduce text')) {
+      await FontScale.instance.decrease10();
+      await _voiceController.speak("Decreasing text size.");
+      return true;
+    }
+
+    return false;
   }
 
   // ---------- TIMER CONTROL ----------
@@ -324,7 +350,10 @@ class _MainPageState extends State<MainPage> {
           final words = heard.toLowerCase().trim();
           setState(() => _isListening = false);
 
-          //SKIP / END tutorial commands
+          // font commands
+          if (await _handleVoiceFontCommand(words)) return;
+
+          // SKIP / END tutorial commands
           if (words.contains("skip") ||
               words.contains("stop tutorial") ||
               words.contains("end tutorial") ||
@@ -334,12 +363,12 @@ class _MainPageState extends State<MainPage> {
             return;
           }
 
-          //No skip → Resume tutorial where it left off
+          // No skip → Resume tutorial where it left off
           setState(() => tutorialPaused = false);
           _runTutorial();
         },
       );
-      return; //STOP HERE
+      return; // STOP HERE
     }
 
     // CASE 1: Active Timer → Control (Pause/Stop/Resume)
@@ -351,6 +380,9 @@ class _MainPageState extends State<MainPage> {
           final words = cmd.toLowerCase();
           debugPrint(words);
 
+          // font commands
+          if (await _handleVoiceFontCommand(words)) return;
+
           if (words.contains("pause") || words.contains("hold")) {
             _countdownController.pause();
             _pauseTimer();
@@ -360,9 +392,11 @@ class _MainPageState extends State<MainPage> {
           } else if (words.contains("stop") || words.contains("end")) {
             _stopTimer();
           } else if (words.contains("timer")) {
-            _voiceController.speak("Please stop the current timer before running new timer");
+            _voiceController.speak(
+                "Please stop the current timer before running new timer");
           } else {
-            _voiceController.speak("Command not recognized while timer is running.");
+            _voiceController
+                .speak("Command not recognized while timer is running.");
           }
         },
       );
@@ -376,6 +410,11 @@ class _MainPageState extends State<MainPage> {
       await _voiceController.startListeningRaw(
         onCommand: (String cmd) async {
           setState(() => _isListening = false);
+          final words = cmd.toLowerCase();
+
+          // font commands
+          if (await _handleVoiceFontCommand(words)) return;
+
           // Pass the raw text string to the Routines Page
           _routinesKey.currentState?.handleVoiceCommand(cmd);
         },
@@ -417,12 +456,17 @@ class _MainPageState extends State<MainPage> {
         });
       },
       onUnrecognized: (spoken) async {
+        final words = spoken.toLowerCase();
+
+        // font commands
+        if (await _handleVoiceFontCommand(words)) return;
+
         if (spoken == "incomplete") {
           await _voiceController.speak(
-              "Please tell me the timer length. For example, say 'start a 5 minute timer'."
-          );
+              "Please tell me the timer length. For example, say 'start a 5 minute timer'.");
         } else {
-          await _voiceController.speak("Sorry, I didn't understand that.");
+          await _voiceController
+              .speak("Sorry, I didn't understand that.");
         }
       },
     );
@@ -438,6 +482,7 @@ class _MainPageState extends State<MainPage> {
       }
     }
   }
+
   //-----------Tutorial functions----------------
   void _endTutorial() async {
     setState(() {
@@ -468,8 +513,7 @@ class _MainPageState extends State<MainPage> {
         await _speakWait(
             'This is the timer creation page. Here is a step by step guide on how to use it. '
                 'One: enter a timer name. Two: set work minutes. Three: set break minutes. Four: set the number of sets. '
-                'You can also say: Start a study timer for four sets with twenty five minutes work and five minutes break.'
-        );
+                'You can also say: Start a study timer for four sets with twenty five minutes work and five minutes break.');
         tutorialStep++;
         break;
 
@@ -478,8 +522,7 @@ class _MainPageState extends State<MainPage> {
         setState(() => _tabIndex = 4);
         await _speakWait(
             'This is the stopwatch selector. Choose Normal Mode for a single stopwatch with voice control, '
-                'or Player Mode to track up to six players.'
-        );
+                'or Player Mode to track up to six players.');
         tutorialStep++;
         break;
 
@@ -487,19 +530,21 @@ class _MainPageState extends State<MainPage> {
       case 2:
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const StopwatchNormalMode(autoStart: false)),
+          MaterialPageRoute(
+              builder: (_) =>
+              const StopwatchNormalMode(autoStart: false)),
         );
         await Future.delayed(const Duration(milliseconds: 200));
         await _speakWait(
-            'This is Normal Mode. Say start to begin, stop to pause, lap to mark a lap, and reset to clear it.'
-        );
+            'This is Normal Mode. Say start to begin, stop to pause, lap to mark a lap, and reset to clear it.');
         tutorialStep++;
         break;
 
     // TUTORIAL DONE
       default:
         tutorialActive = false;
-        await _speakWait("Tutorial complete. You can now explore the app freely.");
+        await _speakWait(
+            "Tutorial complete. You can now explore the app freely.");
         break;
     }
 
@@ -508,6 +553,7 @@ class _MainPageState extends State<MainPage> {
       _runTutorial();
     }
   }
+
   Future<void> _speakWait(String text) async {
     await _tts.stop();
     await _tts.setSpeechRate(0.45);
@@ -519,7 +565,6 @@ class _MainPageState extends State<MainPage> {
       await Future.delayed(const Duration(milliseconds: 200));
     }
   }
-
 
   // ---------- UI HELPERS ----------
   String _formatMMSS(int secondsTotal) {
@@ -544,14 +589,12 @@ class _MainPageState extends State<MainPage> {
       key: ValueKey(_voiceFilledTimer?.id ?? 'create_static'),
       existingTimer: _editingTimer ?? _voiceFilledTimer,
       onSaveTimer: _handleSaveTimer,
-      startVoiceConfirmation: (_voiceFilledTimer != null && _editingTimer == null),
+      startVoiceConfirmation:
+      (_voiceFilledTimer != null && _editingTimer == null),
     ),
 
     // --- 2. PASS THE KEY TO ROUTINES PAGE ---
-    RoutinesPage(
-        key: _routinesKey,
-        routines: _routines
-    ),
+    RoutinesPage(key: _routinesKey, routines: _routines),
 
     const Placeholder(), // Activity page
     const StopwatchModeSelector(),
@@ -564,7 +607,6 @@ class _MainPageState extends State<MainPage> {
           index: _tabIndex,
           children: _pages,
         ),
-
         if (_activeTimer != null)
           Offstage(
             offstage: !_showingCountdown,
@@ -589,26 +631,30 @@ class _MainPageState extends State<MainPage> {
           if (_activeTimer != null) _buildActiveTimerBanner(),
           BottomNavigationBar(
             selectedItemColor: _showingCountdown
-                ? Colors.grey             // No highlight when countdown is showing
-                : const Color(0xFF007BFF),// Normal highlight when not in countdown
-
+                ? Colors.grey // No highlight when countdown is showing
+                : const Color(0xFF007BFF), // Normal highlight when not in countdown
             unselectedItemColor: Colors.grey,
             type: BottomNavigationBarType.fixed,
-            currentIndex: _tabIndex,      // ← keep this unchanged
+            currentIndex: _tabIndex, // ← keep this unchanged
             onTap: (index) {
               setState(() {
                 if (_showingCountdown) {
-                  _showingCountdown = false; // Close countdown when switching tabs
+                  _showingCountdown =
+                  false; // Close countdown when switching tabs
                 }
                 _tabIndex = index;
               });
             },
             items: const [
               BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-              BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Create'),
-              BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Routines'),
-              BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
-              BottomNavigationBarItem(icon: Icon(Icons.timer), label: 'Stopwatch'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.add_circle_outline), label: 'Create'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.list_alt), label: 'Routines'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.timer), label: 'Stopwatch'),
             ],
           ),
           GestureDetector(
@@ -621,7 +667,6 @@ class _MainPageState extends State<MainPage> {
                   setState(() => tutorialPaused = false);
                   _runTutorial(); // resume
                 }
-
               } else {
                 // User starts speaking → Pause tutorial
                 if (tutorialActive) {
@@ -634,17 +679,20 @@ class _MainPageState extends State<MainPage> {
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              color: _isListening ? Colors.redAccent : const Color(0xFF007BFF),
+              color: _isListening
+                  ? Colors.redAccent
+                  : const Color(0xFF007BFF),
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 28),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(_isListening ? Icons.mic : Icons.mic_off, color: Colors.white),
+                  Icon(_isListening ? Icons.mic : Icons.mic_off,
+                      color: Colors.white),
                   const SizedBox(width: 8),
-                  Text(
-                    _isListening ? "Listening... Tap to stop" : "Tap to Speak",
-                    style: const TextStyle(
+                  const Text(
+                    "Tap to Speak",
+                    style: TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -667,7 +715,8 @@ class _MainPageState extends State<MainPage> {
     return GestureDetector(
       onTap: () => setState(() => _showingCountdown = true), // <-- FULL BANNER IS TAPPABLE
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        padding:
+        const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         color: Colors.blue.withOpacity(0.12),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -678,7 +727,8 @@ class _MainPageState extends State<MainPage> {
               children: [
                 Text(
                   active.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const Text("Timer Running"),
               ],

@@ -24,7 +24,7 @@ class FontScale extends ChangeNotifier {
     await prefs.setDouble(_kPrefKey, _scale);
   }
 
-  static double _clamp(double v) => v.clamp(_min, _max);
+  static double _clamp(double v) => v.clamp(_min, _max).toDouble();
 
   Future<void> setScale(double value) async {
     _scale = _clamp(value);
