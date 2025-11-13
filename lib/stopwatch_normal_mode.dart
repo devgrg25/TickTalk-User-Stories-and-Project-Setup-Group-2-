@@ -5,7 +5,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 
 class StopwatchNormalMode extends StatefulWidget {
-  final bool autoStart; // Flag to check if auto-started from homepage
+  final bool autoStart;
 
   const StopwatchNormalMode({super.key, this.autoStart = false});
 
@@ -42,7 +42,7 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
     if (widget.autoStart) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
-          _start(); // Auto-start the stopwatch
+          _start();
           _startListening(); // Auto-start voice listening
         }
       });
@@ -120,7 +120,7 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
     _ticker.dispose();
     _stopwatch.stop();
     _speech.cancel();
-    _tts.stop(); // Stop TTS when disposing
+    _tts.stop();
     super.dispose();
   }
 
@@ -160,13 +160,7 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
     }
   }
 
-  void _toggleListening() async {
-    if (_isListening) {
-      await _stopListening();
-    } else {
-      await _startListening();
-    }
-  }
+  // ✅ REMOVED: _toggleListening() - no longer needed
 
   Future<void> _startListening() async {
     if (!_speech.isAvailable) {
@@ -254,7 +248,6 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
       if (_laps.isNotEmpty) {
         setState(() => _showSummary = true);
         _speakFast('Showing laps');
-        // Stop listening when showing summary
         await _stopListening();
       } else {
         _speakFast('No laps recorded');
@@ -298,12 +291,12 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
         leading: BackButton(
           color: Colors.black,
           onPressed: () {
-            // Stop TTS and speech when going back
             _tts.stop();
             _speech.cancel();
             Navigator.of(context).pop();
           },
         ),
+        // ✅ REMOVED: Local mic button from AppBar actions
       ),
       body: Column(
         children: [
@@ -355,7 +348,7 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
                   ElevatedButton.icon(
                     onPressed: () {
                       setState(() => _showSummary = true);
-                      _stopListening(); // Stop listening when viewing summary
+                      _stopListening();
                     },
                     icon: const Icon(Icons.list_alt, size: 20),
                     label: Text('View ${_laps.length} Lap${_laps.length > 1 ? 's' : ''}'),
@@ -370,108 +363,140 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
                   ),
                 const SizedBox(height: 32),
 
-                // Mic Button
+                // ✅ NEW: Replaced local mic button with global mic hint
                 Column(
                   children: [
                     Semantics(
-                      label: _isListening
-                          ? 'Voice control active. Tap to stop listening'
-                          : 'Voice control. Tap to start listening for commands',
-                      button: true,
-                      hint: 'Double tap to activate',
-                      child: GestureDetector(
-                        onTap: _toggleListening,
-                        child: Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _isListening ? Colors.red : const Color(0xFF007BFF),
-                            boxShadow: [
-                              BoxShadow(
-                                color: (_isListening ? Colors.red : const Color(0xFF007BFF))
-                                    .withOpacity(0.4),
-                                blurRadius: 20,
-                                spreadRadius: 5,
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            _isListening ? Icons.mic : Icons.mic_none,
-                            color: Colors.white,
-                            size: 50,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _isListening ? '🎤 Listening for commands...' : 'Tap mic to enable voice',
-                      style: TextStyle(
-                        color: _isListening ? Colors.red : Colors.black54,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'Say: "start" • "stop" • "lap" • "reset"',
-                        style: TextStyle(
-                          color: Colors.grey.shade700,
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-
-                    if (_lastRecognizedCommand.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      label: 'Voice control info',
+                      hint: 'Use the mic bar at the bottom of the screen',
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        margin: const EdgeInsets.symmetric(horizontal: 24),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF007BFF).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          color: _isListening
+                              ? Colors.red.withOpacity(0.1)
+                              : const Color(0xFF007BFF).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: const Color(0xFF007BFF).withOpacity(0.3),
+                            color: _isListening
+                                ? Colors.red.withOpacity(0.3)
+                                : const Color(0xFF007BFF).withOpacity(0.3),
+                            width: 2,
                           ),
                         ),
                         child: Column(
                           children: [
-                            const Text(
-                              'Heard:',
+                            Icon(
+                              _isListening ? Icons.mic : Icons.mic_none,
+                              color: _isListening ? Colors.red : const Color(0xFF007BFF),
+                              size: 48,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              _isListening
+                                  ? '🎤 Listening for commands...'
+                                  : 'Tap mic bar below to enable voice',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.black54,
+                                color: _isListening ? Colors.red : Colors.black87,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _lastRecognizedCommand,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF007BFF),
-                                fontWeight: FontWeight.bold,
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
                               ),
-                              textAlign: TextAlign.center,
+                              child: Text(
+                                'Say: "start" • "stop" • "lap" • "reset"',
+                                style: TextStyle(
+                                  color: Colors.grey.shade700,
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
                             ),
+                            if (_lastRecognizedCommand.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Text(
+                                      'Heard:',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.black54,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _lastRecognizedCommand,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF007BFF),
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ],
             ),
           ),
         ],
+      ),
+      // ✅ NEW: Add bottom mic bar directly in this page
+      bottomNavigationBar: GestureDetector(
+        onTap: () async {
+          if (_isListening) {
+            await _stopListening();
+          } else {
+            await _startListening();
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          color: _isListening ? Colors.redAccent : const Color(0xFF007BFF),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 28),
+          child: SafeArea(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  _isListening ? Icons.mic : Icons.mic_off,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _isListening ? "Listening... Tap to stop" : "Tap to Speak",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -511,7 +536,6 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Speak Summary Button
                 ElevatedButton.icon(
                   onPressed: _speakSummary,
                   icon: const Icon(Icons.volume_up, size: 24),
@@ -602,10 +626,8 @@ class _StopwatchNormalModeState extends State<StopwatchNormalMode>
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    // FIXED: Stop TTS when closing summary
                     await _tts.stop();
                     setState(() => _showSummary = false);
-                    // Restart listening after closing summary
                     if (_isListening) {
                       _startListening();
                     }
