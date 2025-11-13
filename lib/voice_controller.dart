@@ -163,8 +163,27 @@ class VoiceController {
   //------------------------------- Create Timer -------------------------------
 
   Future<ParsedVoiceCommand?> interpretCommand(String command) async {
-    final text = command.toLowerCase();
+    final text = command.toLowerCase().trim();
 
+    if (!text.contains("timer")) {
+      return null; // This will trigger onUnrecognized()
+    }
+
+    //checks incomplete timer sentences
+    final containsTimer = text.contains("timer");
+    final containsNumber = RegExp(r'\d+').hasMatch(text);
+
+    if (containsTimer && !containsNumber) {
+      return ParsedVoiceCommand(
+        name: null,
+        workMinutes: null,
+        breakMinutes: null,
+        sets: null,
+        simpleTimerMinutes: null,
+      );
+    }
+
+    //complete timer details
     final nameMatch = RegExp(
       r'(?:start|create)\s+(?:a\s+)?(.+?)?\s*timer\b',
       caseSensitive: false,
@@ -199,6 +218,7 @@ class VoiceController {
 
   Future<void> startListeningForTimer({
     required Function(ParsedVoiceCommand) onCommand,
+    required Function(String) onUnrecognized,
   }) async {
     if (!_isInitialized) await initialize();
 
@@ -214,7 +234,20 @@ class VoiceController {
         if (result.finalResult) {
           final parsed = await interpretCommand(result.recognizedWords);
           debugPrint(result.recognizedWords);
-          if (parsed != null) onCommand(parsed);
+          if (parsed == null) {
+            // completely unrecognized pattern
+            onUnrecognized(result.recognizedWords);
+          }
+          else if (parsed.workMinutes == null &&
+              parsed.breakMinutes == null &&
+              parsed.sets == null &&
+              parsed.simpleTimerMinutes == null) {
+            // if User said something vague like "timer"
+            onUnrecognized("incomplete");
+          }
+          else {
+            onCommand(parsed);
+          }
           await stopListening();
         }
       },
