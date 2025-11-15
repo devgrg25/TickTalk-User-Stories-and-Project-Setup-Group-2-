@@ -1,34 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'UI/create_timer.dart';   // MUST MATCH FOLDER NAME EXACTLY
 
-import 'UI/MainPage.dart';
-import 'UI/tutorial/welcome_page.dart';
-
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  final prefs = await SharedPreferences.getInstance();
-  final bool hasSeenWelcome = prefs.getBool('hasSeenWelcome') ?? false;
-
-  runApp(TickTalkApp(hasSeenWelcome: hasSeenWelcome));
+void main() {
+  runApp(const TimerApp());
 }
 
-class TickTalkApp extends StatelessWidget {
-  final bool hasSeenWelcome;
-
-  const TickTalkApp({super.key, required this.hasSeenWelcome});
+class TimerApp extends StatelessWidget {
+  const TimerApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TickTalk',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF007BFF),
-        scaffoldBackgroundColor: const Color(0xFFF2F6FA),
+      title: 'Timer App',
+
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF0F0F0F),
       ),
-      home: hasSeenWelcome ? const MainPage() : const WelcomePage(),
+
+      home: const CreateTimer(),   // MUST MATCH CLASS NAME EXACTLY
     );
   }
 }
