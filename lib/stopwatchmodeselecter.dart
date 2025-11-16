@@ -42,6 +42,7 @@ class StopwatchModeSelector extends StatelessWidget {
               ),
               const SizedBox(height: 48),
 
+              // Normal Mode Button
               _buildModeCard(
                 context,
                 title: 'Normal Mode',
@@ -59,6 +60,7 @@ class StopwatchModeSelector extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
+              // Player Mode Button
               _buildModeCard(
                 context,
                 title: 'Player Mode',

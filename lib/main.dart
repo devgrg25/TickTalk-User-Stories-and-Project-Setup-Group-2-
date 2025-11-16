@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'tts_service.dart';
 import 'MainPage.dart';
 import 'welcome_page.dart';
 
@@ -9,6 +9,8 @@ Future<void> main() async {
 
   final prefs = await SharedPreferences.getInstance();
   final bool hasSeenWelcome = prefs.getBool('hasSeenWelcome') ?? false;
+  final ttsService = TTSService();
+  await ttsService.initialize();
 
   runApp(TickTalkApp(hasSeenWelcome: hasSeenWelcome));
 }
