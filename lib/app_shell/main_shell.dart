@@ -17,14 +17,15 @@ class _MainShellState extends State<MainShell> {
   int _index = 0;
   bool _isListening = false;
   String _lastWords = "";
-  Key createTimerKey = UniqueKey();
 
-  late stt.SpeechToText _speech;
+  Key createTimerKey = UniqueKey();
+  final GlobalKey<RoutinesPageState> routinesKey = GlobalKey<RoutinesPageState>();
+
+  final stt.SpeechToText _speech = stt.SpeechToText();
 
   @override
   void initState() {
     super.initState();
-    _speech = stt.SpeechToText();
   }
 
   void _returnHome() {
@@ -36,8 +37,7 @@ class _MainShellState extends State<MainShell> {
     if (!_isListening) {
       bool available = await _speech.initialize(
         onStatus: (status) {
-          debugPrint("🔊 Speech status: $status");
-          if (status == "notListening") {
+          if (status.contains('notListening') || status.contains('done')) {
             setState(() => _isListening = false);
           }
         },
@@ -45,11 +45,15 @@ class _MainShellState extends State<MainShell> {
       );
 
       if (available) {
-        setState(() => _isListening = true);
-        _speech.listen(
+        setState(() {
+          _isListening = true;
+          _lastWords = "";
+        });
+
+        await _speech.listen(
           onResult: (result) {
             setState(() => _lastWords = result.recognizedWords);
-            debugPrint("🗣 Heard: $_lastWords");
+            // Later: handle commands here
           },
           listenMode: stt.ListenMode.dictation,
           partialResults: true,
@@ -57,7 +61,7 @@ class _MainShellState extends State<MainShell> {
       }
     } else {
       setState(() => _isListening = false);
-      _speech.stop();
+      await _speech.stop();
     }
   }
 
@@ -69,10 +73,12 @@ class _MainShellState extends State<MainShell> {
         key: createTimerKey,
         child: CreateTimerPage(onTimerStarted: _returnHome),
       ),
-      const RoutinesPage(),
+      RoutinesPage(key: routinesKey),
       const Center(
-        child: Text("Settings",
-            style: TextStyle(color: Colors.white, fontSize: 18)),
+        child: Text(
+          "Settings",
+          style: TextStyle(color: Colors.white, fontSize: 18),
+        ),
       ),
     ];
 
@@ -83,7 +89,6 @@ class _MainShellState extends State<MainShell> {
           children: [
             IndexedStack(index: _index, children: screens),
 
-            /// 🔹 Live caption text when mic is listening
             if (_isListening && _lastWords.isNotEmpty)
               Positioned(
                 left: 0,
@@ -91,16 +96,14 @@ class _MainShellState extends State<MainShell> {
                 bottom: 160,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.55),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       _lastWords,
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 16),
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
                     ),
                   ),
                 ),
@@ -108,6 +111,7 @@ class _MainShellState extends State<MainShell> {
           ],
         ),
       ),
+
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -116,7 +120,13 @@ class _MainShellState extends State<MainShell> {
             selectedIndex: _index,
             indicatorColor: const Color(0xFF7A3FFF),
             labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            onDestinationSelected: (i) => setState(() => _index = i),
+            onDestinationSelected: (i) {
+              setState(() => _index = i);
+
+              if (i == 2) {
+                routinesKey.currentState?.reload();
+              }
+            },
             destinations: const [
               NavigationDestination(
                 icon: Icon(Icons.home_outlined),
@@ -141,12 +151,10 @@ class _MainShellState extends State<MainShell> {
             ],
           ),
 
-          /// 🟣 Glowing talk sphere mic
           VoiceMicBar(
             isListening: _isListening,
             onTap: _toggleMic,
           ),
-
         ],
       ),
     );

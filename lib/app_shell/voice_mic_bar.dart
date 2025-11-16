@@ -24,7 +24,7 @@ class _VoiceMicBarState extends State<VoiceMicBar>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 12), // slow background animation
+      duration: const Duration(seconds: 12),
     )..repeat();
   }
 
@@ -41,7 +41,6 @@ class _VoiceMicBarState extends State<VoiceMicBar>
       builder: (_, __) {
         final t = (math.sin(_controller.value * math.pi * 2) + 1) / 2;
 
-        // Animated background gradient
         final bg1 = Color.lerp(
           const Color(0xFF1A1A1A),
           const Color(0xFF2A1B3F),
@@ -53,7 +52,6 @@ class _VoiceMicBarState extends State<VoiceMicBar>
           t,
         )!;
 
-        // Glow color for orb
         final glowColor = Color.lerp(
           const Color(0xFF7A3FFF),
           const Color(0xFF00E5FF),

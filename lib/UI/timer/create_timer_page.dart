@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
 import '../../logic/timer/timer_controller.dart';
 import '../../logic/timer/timer_manager.dart';
 import '../../logic/routines/routine_storage.dart';
@@ -30,7 +32,7 @@ class _CreateTimerPageState extends State<CreateTimerPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: Text(
           interval == null ? "Add Interval" : "Edit Interval",
-          style: const TextStyle(color: Colors.white),
+          style: GoogleFonts.orbitron(color: Colors.white),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -75,8 +77,7 @@ class _CreateTimerPageState extends State<CreateTimerPage> {
                 if (interval == null) {
                   intervals.add(TimerInterval(name: name, seconds: sec));
                 } else {
-                  intervals[index!] =
-                      TimerInterval(name: name, seconds: sec);
+                  intervals[index!] = TimerInterval(name: name, seconds: sec);
                 }
               });
 
@@ -97,8 +98,6 @@ class _CreateTimerPageState extends State<CreateTimerPage> {
         .map((i) => TimerInterval(name: i.name, seconds: i.seconds))
         .toList();
 
-    bool savedRoutine = false;
-
     if (saveAsRoutine) {
       await RoutineStorage.instance.saveRoutine(
         Routine(
@@ -107,7 +106,6 @@ class _CreateTimerPageState extends State<CreateTimerPage> {
           intervals: cloned,
         ),
       );
-      savedRoutine = true;
     }
 
     TimerManager.instance.startTimer(timerName.toUpperCase(), cloned);
@@ -118,8 +116,9 @@ class _CreateTimerPageState extends State<CreateTimerPage> {
     setState(() {});
 
     widget.onTimerStarted();
+
     if (mounted && Navigator.canPop(context)) {
-      Navigator.pop(context, savedRoutine); // return true if routine saved
+      Navigator.pop(context);
     }
   }
 
@@ -131,8 +130,14 @@ class _CreateTimerPageState extends State<CreateTimerPage> {
         child: Column(
           children: [
             const SizedBox(height: 10),
-            const Text("Create Timer",
-                style: TextStyle(color: Colors.white, fontSize: 22)),
+            Text(
+              "Create Timer",
+              style: GoogleFonts.orbitron(
+                color: Colors.white,
+                fontSize: 22,
+                letterSpacing: 2,
+              ),
+            ),
             const SizedBox(height: 10),
 
             Padding(
@@ -151,16 +156,19 @@ class _CreateTimerPageState extends State<CreateTimerPage> {
             SwitchListTile(
               value: saveAsRoutine,
               onChanged: (v) => setState(() => saveAsRoutine = v),
-              title: const Text("Save as Routine",
-                  style: TextStyle(color: Colors.white)),
+              title: Text(
+                "Save as Routine",
+                style: GoogleFonts.orbitron(color: Colors.white, fontSize: 13),
+              ),
               thumbColor: WidgetStateProperty.all(Colors.blueAccent),
             ),
 
             Expanded(
               child: intervals.isEmpty
-                  ? const Center(
+                  ? Center(
                 child: Text("No intervals added",
-                    style: TextStyle(color: Colors.grey)),
+                    style: GoogleFonts.orbitron(
+                        color: Colors.grey, fontSize: 13)),
               )
                   : ListView.builder(
                 itemCount: intervals.length,
@@ -168,9 +176,11 @@ class _CreateTimerPageState extends State<CreateTimerPage> {
                   final item = intervals[i];
                   return ListTile(
                     title: Text(item.name,
-                        style: const TextStyle(color: Colors.white)),
+                        style: GoogleFonts.orbitron(
+                            color: Colors.white, fontSize: 14)),
                     trailing: Text("${item.seconds}s",
-                        style: const TextStyle(color: Colors.white70)),
+                        style: GoogleFonts.orbitron(
+                            color: Colors.white70, fontSize: 13)),
                     onTap: () => _openDialog(interval: item, index: i),
                   );
                 },

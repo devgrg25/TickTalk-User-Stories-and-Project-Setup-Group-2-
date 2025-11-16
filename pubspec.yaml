@@ -1,6 +1,6 @@
 name: ticktalk_app
 description: "A new Flutter project."
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: 'none'
 version: 1.0.0+1
 
 environment:
@@ -10,19 +10,17 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # --- Core packages ---
-  shared_preferences: ^2.2.3
+  # UI & Fonts
+  google_fonts: ^6.1.0
   cupertino_icons: ^1.0.8
 
-  # --- Accessibility & voice control ---
-  flutter_tts: ^3.8.5
-  google_speech: ^3.0.0
+  # App state & storage
+  shared_preferences: ^2.2.3
   connectivity_plus: ^6.0.3
-  speech_to_text:
-    git:
-      url: https://github.com/csdcorp/speech_to_text.git
-      path: speech_to_text
-      ref: main
+
+  # Voice (Google Speech & Text-to-Speech)
+  speech_to_text: ^7.3.0
+  flutter_tts: ^3.8.5
 
 dev_dependencies:
   flutter_test:
@@ -31,3 +29,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/

@@ -6,7 +6,7 @@ class ActiveTimer {
   final String id;
   final String name;
   final TimerController controller;
-  bool finished = false; // NEW FLAG
+  bool finished;
 
   ActiveTimer({
     required this.id,
@@ -17,6 +17,7 @@ class ActiveTimer {
 }
 
 class TimerManager {
+  void forceUpdate() => _emit();
   TimerManager._();
   static final TimerManager instance = TimerManager._();
 
@@ -30,9 +31,9 @@ class TimerManager {
     if (!_change.isClosed) _change.add(null);
   }
 
+  /// Start a new timer and keep it in the list even when finished.
   TimerController startTimer(String name, List<TimerInterval> intervals) {
     final controller = TimerController(intervals: intervals);
-
     final id = DateTime.now().millisecondsSinceEpoch.toString();
 
     final active = ActiveTimer(
@@ -45,15 +46,16 @@ class TimerManager {
     _timers.add(active);
     _emit();
 
-    controller.onTimerComplete = () {
-      active.finished = true;  // mark finished instead of removing
-      _emit();
+    controller.onTick = () {
+      _emit(); // ⬅ notify UI every second
     };
+
 
     controller.start();
     return controller;
   }
 
+  /// Remove timer manually (Stop button or X icon).
   void stopTimer(String id) {
     _timers.removeWhere((t) {
       if (t.id == id) {

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 
-
 class TimerInterval {
   final String name;
   final int seconds;
@@ -10,7 +9,8 @@ class TimerInterval {
 
 class TimerController {
   final List<TimerInterval> intervals;
-  late TimerInterval current;
+
+  TimerInterval? current;
   TimerInterval? next;
 
   int _currentIndex = 0;
@@ -23,9 +23,10 @@ class TimerController {
   VoidCallback? onTimerComplete;
 
   TimerController({required this.intervals}) {
-    current = intervals.first;
-    remainingSeconds = current.seconds;
-    _updateNext();
+    if (intervals.isEmpty) {
+      throw Exception("TimerController created with no intervals.");
+    }
+    _setCurrentInterval(0);
   }
 
   static String format(int sec) {
@@ -35,48 +36,67 @@ class TimerController {
   }
 
   void start() {
-    _ticker?.cancel();
+    stop();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!isPaused) _tick();
     });
   }
 
-  void pause() => isPaused = true;
-  void resume() => isPaused = false;
-
-  void addTime(int sec) => remainingSeconds += sec;
-
-  void stop() {
-    _ticker?.cancel();
+  void pause() {
+    isPaused = true;
   }
 
-  void _tick() {
-    remainingSeconds--;
-    onTick?.call();
+  void resume() {
+    isPaused = false;
+  }
 
-    if (remainingSeconds <= 0) {
-      _nextInterval();
+  bool get isRunning => _ticker != null && !isPaused;
+  bool get isStopped => _ticker == null;
+
+  // bool get isRunning => _ticker != null && !isPaused;
+  // bool get isStopped => _ticker == null;
+
+
+  void addTime(int sec) {
+    if (remainingSeconds != null) {
+      remainingSeconds = (remainingSeconds! + sec).clamp(0, 999999);
     }
   }
 
-  void _updateNext() {
-    next = _currentIndex + 1 < intervals.length
-        ? intervals[_currentIndex + 1]
-        : null;
+  void stop() {
+    _ticker?.cancel();
+    _ticker = null;
+  }
+
+  void _tick() {
+    if (remainingSeconds == null) return;
+
+    if (remainingSeconds! > 0) {
+      remainingSeconds = remainingSeconds! - 1;
+      onTick?.call();
+      return;
+    }
+
+    _nextInterval();
+  }
+
+  void _setCurrentInterval(int index) {
+    _currentIndex = index;
+    current = intervals[index];
+    remainingSeconds = current!.seconds;
+
+    next = index + 1 < intervals.length ? intervals[index + 1] : null;
   }
 
   void _nextInterval() {
     onIntervalComplete?.call();
-    _currentIndex++;
 
-    if (_currentIndex >= intervals.length) {
+    final newIndex = _currentIndex + 1;
+    if (newIndex >= intervals.length) {
       stop();
       onTimerComplete?.call();
       return;
     }
-
-    current = intervals[_currentIndex];
-    remainingSeconds = current.seconds;
-    _updateNext();
+    _setCurrentInterval(newIndex);
   }
 }

@@ -6,7 +6,7 @@ import '../../../logic/timer/timer_manager.dart';
 import '../timer/countdown_page.dart';
 
 class RoutinesPage extends StatefulWidget {
-  const RoutinesPage({Key? key}) : super(key: key);
+  const RoutinesPage({super.key});
 
   @override
   State<RoutinesPage> createState() => RoutinesPageState();

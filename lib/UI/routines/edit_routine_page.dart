@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../logic/routines/routine_storage.dart';
 import '../../../logic/routines/routine_model.dart';
 import '../../../logic/timer/timer_controller.dart';
+import '../../ui/widgets/animated_page_title.dart';
+import '../../ui/widgets/glass_button.dart';
+import '../../ui/theme/app_background.dart';
 
 class EditRoutinePage extends StatefulWidget {
   final Routine? existing;
@@ -29,8 +33,7 @@ class _EditRoutinePageState extends State<EditRoutinePage> {
 
   void _openDialog({TimerInterval? interval, int? index}) {
     final localName = TextEditingController(text: interval?.name ?? "");
-    final localSec =
-    TextEditingController(text: interval?.seconds.toString() ?? "");
+    final localSec = TextEditingController(text: interval?.seconds.toString() ?? "");
 
     showDialog(
       context: context,
@@ -39,7 +42,7 @@ class _EditRoutinePageState extends State<EditRoutinePage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: Text(
           interval == null ? "Add Interval" : "Edit Interval",
-          style: const TextStyle(color: Colors.white),
+          style: GoogleFonts.orbitron(color: Colors.white),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -106,71 +109,64 @@ class _EditRoutinePageState extends State<EditRoutinePage> {
     );
 
     await RoutineStorage.instance.saveRoutine(routine);
-
     if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F0F),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            Text(
-              widget.existing == null ? "New Routine" : "Edit Routine",
-              style: const TextStyle(color: Colors.white, fontSize: 22),
-            ),
-            const SizedBox(height: 10),
+      body: AppBackground(
+        child: SafeArea(
+          child: Column(
+            children: [
+              const SizedBox(height: 22),
+              AnimatedPageTitle(
+                  title: widget.existing == null
+                      ? "New Routine"
+                      : "Edit Routine",
+                  subtitle: "Customize"),
+              const SizedBox(height: 22),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: TextField(
-                controller: nameCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: "Routine Name",
-                  labelStyle: TextStyle(color: Colors.grey),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: TextField(
+                  controller: nameCtrl,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: "Routine Name",
+                    labelStyle: TextStyle(color: Colors.grey),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(height: 12),
 
-            const SizedBox(height: 10),
-
-            Expanded(
-              child: intervals.isEmpty
-                  ? const Center(
-                  child: Text("No intervals added",
-                      style: TextStyle(color: Colors.grey)))
-                  : ListView.builder(
-                itemCount: intervals.length,
-                itemBuilder: (_, i) {
-                  final item = intervals[i];
-                  return ListTile(
-                    title: Text(item.name,
-                        style: const TextStyle(color: Colors.white)),
-                    trailing: Text("${item.seconds}s",
-                        style: const TextStyle(color: Colors.white70)),
-                    onTap: () => _openDialog(interval: item, index: i),
-                  );
-                },
+              Expanded(
+                child: intervals.isEmpty
+                    ? const Center(
+                    child: Text("No intervals added",
+                        style: TextStyle(color: Colors.grey)))
+                    : ListView.builder(
+                  itemCount: intervals.length,
+                  itemBuilder: (_, i) {
+                    final item = intervals[i];
+                    return ListTile(
+                      title: Text(item.name,
+                          style: GoogleFonts.orbitron(color: Colors.white)),
+                      trailing: Text("${item.seconds}s",
+                          style: GoogleFonts.orbitron(
+                              color: Colors.white70, fontSize: 12)),
+                      onTap: () => _openDialog(interval: item, index: i),
+                    );
+                  },
+                ),
               ),
-            ),
 
-            ElevatedButton(
-              onPressed: () => _openDialog(),
-              child: const Text("Add Interval"),
-            ),
-            const SizedBox(height: 8),
-
-            ElevatedButton(
-              onPressed: intervals.isEmpty ? null : _save,
-              child: const Text("Save Routine"),
-            ),
-
-            const SizedBox(height: 24),
-          ],
+              GlassButton(text: "Add Interval", onPressed: _openDialog),
+              const SizedBox(height: 12),
+              GlassButton(text: "Save Routine", onPressed: intervals.isEmpty ? null : _save),
+              const SizedBox(height: 26),
+            ],
+          ),
         ),
       ),
     );
