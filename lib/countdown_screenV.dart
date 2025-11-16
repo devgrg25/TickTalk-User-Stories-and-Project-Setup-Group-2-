@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'routine_timer_model.dart'; // To access the NEW TimerData class
+import 'timer_models/routine_timer_model.dart'; // To access the NEW TimerData class
 
 class CountdownScreenV extends StatefulWidget {
   final TimerDataV timerData;
@@ -88,7 +88,7 @@ class _CountdownScreenState extends State<CountdownScreenV> {
 
   @override
   Widget build(BuildContext context) {
-    // --- UI Colors ---
+    // --- routines Colors ---
     const Color primaryBlue = Color(0xFF007BFF);
     const Color cardBackground = Color(0xFFF9FAFB);
     const Color cardBorder = Color(0xFFE5E7EB);

@@ -3,17 +3,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:convert';
 import 'dart:async';
-import 'stopwatch_normal_mode.dart';
+import 'stopwatch/stopwatch_normal_mode.dart';
 import 'homepage.dart';
 import 'create_timer_screen.dart';
-import 'timer_model.dart';
+import 'timer_models/timer_model.dart';
 import 'countdown_screen.dart';
 import 'countdown_screenV.dart';
-import 'stopwatchmodeselecter.dart';
-import 'voice_controller.dart';
-import 'routine_timer_model.dart';
-import 'routines.dart';
-import 'routines_page.dart';
+import 'stopwatch/stopwatchmodeselecter.dart';
+import 'controllers/voice_controller.dart';
+import 'timer_models/routine_timer_model.dart';
+import 'routines/routines.dart';
+import 'routines/routines_page.dart';
+import 'controllers/voice_logic.dart';
 
 class MainPage extends StatefulWidget {
   final bool tutorialMode;
@@ -46,6 +47,8 @@ class _MainPageState extends State<MainPage> {
   List<TimerData> _timers = [];
   TimerData? _voiceFilledTimer;
 
+  late ListenController _listen;
+
   static const String _timersKey = 'saved_timers_list';
 
   // --- 1. DEFINE THE GLOBAL KEY FOR ROUTINES PAGE ---
@@ -63,8 +66,34 @@ class _MainPageState extends State<MainPage> {
     // TTS once
     _initTts();
 
+    _listen = ListenController(
+      voice: _voiceController,
+      countdown: _countdownController,
+      routinesKey: _routinesKey,
+      getIsListening: () => _isListening,
+      setIsListening: (v) => _isListening = v,
+      getTutorialActive: () => tutorialActive,
+      getTutorialPaused: () => tutorialPaused,
+      setTutorialPaused: (v) => tutorialPaused = v,
+      runTutorial: _runTutorial,
+      endTutorial: _endTutorial,
+      getActiveTimer: () => _activeTimer,
+      getTabIndex: () => _tabIndex,
+      pauseTimer: _pauseTimer,
+      resumeTimer: _resumeTimer,
+      stopTimer: _stopTimer,
+      setEditingTimer: (v) => _editingTimer = v,
+      setVoiceFilledTimer: (v) => _voiceFilledTimer = v,
+      setTabIndex: (v) => _tabIndex = v,
+      getTimers: () => _timers,
+      generateUniqueName: _generateUniqueTimerName,
+      stopPageTts: () => _tts.stop(),
+      mounted: () => mounted,
+      setState: setState,
+    );
+
     _routines = PredefinedRoutines(
-      stopListening: _stopListening,
+      stopListening: _listen.stopListening,
       speak: _speak,
       playTimer: _playTimerV,
     );
@@ -309,135 +338,6 @@ class _MainPageState extends State<MainPage> {
     });
   }
 
-  // ---------- VOICE ----------
-  Future<void> _startListening() async {
-    await _tts.stop();
-    _countdownController.stopSpeaking();
-    if (_isListening) return;
-    setState(() => _isListening = true);
-
-    // CASE 0: Tutorial is active → only listen for skip / resume
-    if (tutorialActive) {
-      debugPrint('Case 0 - Tutorial');
-      await _voiceController.startListeningRaw(
-        onCommand: (String heard) async {
-          final words = heard.toLowerCase().trim();
-          setState(() => _isListening = false);
-
-          //SKIP / END tutorial commands
-          if (words.contains("skip") ||
-              words.contains("stop tutorial") ||
-              words.contains("end tutorial") ||
-              words.contains("cancel tutorial") ||
-              words.contains("done")) {
-            _endTutorial();
-            return;
-          }
-
-          //No skip → Resume tutorial where it left off
-          setState(() => tutorialPaused = false);
-          _runTutorial();
-        },
-      );
-      return; //STOP HERE
-    }
-
-    // CASE 1: Active Timer → Control (Pause/Stop/Resume)
-    if (_activeTimer != null) {
-      debugPrint('Case 1 - Active Timer');
-      await _voiceController.startListeningForControl(
-        onCommand: (cmd) async {
-          setState(() => _isListening = false);
-          final words = cmd.toLowerCase();
-          debugPrint(words);
-
-          if (words.contains("pause") || words.contains("hold")) {
-            _countdownController.pause();
-            _pauseTimer();
-          } else if (words.contains("resume") || words.contains("continue")) {
-            _countdownController.resume();
-            _resumeTimer();
-          } else if (words.contains("stop") || words.contains("end")) {
-            _stopTimer();
-          } else if (words.contains("timer")) {
-            _voiceController.speak("Please stop the current timer before running new timer");
-          } else {
-            _voiceController.speak("Command not recognized while timer is running.");
-          }
-        },
-      );
-      return;
-    }
-
-    // CASE 2: ROUTINES TAB IS ACTIVE (Index 2)
-    // --- 3. ROUTE VOICE COMMANDS TO ROUTINES PAGE ---
-    if (_tabIndex == 2) {
-      debugPrint('Case 2 - Routines Tab');
-      await _voiceController.startListeningRaw(
-        onCommand: (String cmd) async {
-          setState(() => _isListening = false);
-          // Pass the raw text string to the Routines Page
-          _routinesKey.currentState?.handleVoiceCommand(cmd);
-        },
-      );
-      return;
-    }
-
-    // CASE 3: No active timer & Not on Routines tab → Default to Create Timer
-    debugPrint('Case 3 - Create Timer');
-    await _voiceController.startListeningForTimer(
-      onCommand: (ParsedVoiceCommand data) async {
-        await _voiceController.stopListening();
-
-        if (!mounted) return;
-        setState(() => _isListening = false);
-
-        final work = data.workMinutes ?? data.simpleTimerMinutes ?? 0;
-        final sets = data.sets ?? 1;
-        final breaks = data.breakMinutes ?? 0;
-        final totalTime = ((work * sets) + (breaks * (sets - 1))) * 60;
-
-        final timerData = TimerData(
-          id: DateTime.now().toIso8601String(),
-          name: (data.name?.trim().isNotEmpty ?? false)
-              ? data.name!
-              : _generateUniqueTimerName(_timers),
-          workInterval: work,
-          breakInterval: breaks,
-          totalSets: sets,
-          totalTime: totalTime,
-          currentSet: 1,
-        );
-
-        if (!mounted) return;
-        setState(() {
-          _editingTimer = null;
-          _voiceFilledTimer = timerData;
-          _tabIndex = 1; // switch to Create screen
-        });
-      },
-      onUnrecognized: (spoken) async {
-        if (spoken == "incomplete") {
-          await _voiceController.speak(
-              "Please tell me the timer length. For example, say 'start a 5 minute timer'."
-          );
-        } else {
-          await _voiceController.speak("Sorry, I didn't understand that.");
-        }
-      },
-    );
-  }
-
-  Future<void> _stopListening() async {
-    if (!_isListening) return;
-    try {
-      await _voiceController.stopListening();
-    } finally {
-      if (mounted) {
-        setState(() => _isListening = false);
-      }
-    }
-  }
   //-----------Tutorial functions----------------
   void _endTutorial() async {
     setState(() {
@@ -521,7 +421,7 @@ class _MainPageState extends State<MainPage> {
   }
 
 
-  // ---------- UI HELPERS ----------
+  // ---------- routines HELPERS ----------
   String _formatMMSS(int secondsTotal) {
     final m = secondsTotal ~/ 60;
     final s = secondsTotal % 60;
@@ -614,8 +514,8 @@ class _MainPageState extends State<MainPage> {
           GestureDetector(
             onTap: () async {
               if (_isListening) {
-                // User finished speaking → Resume tutorial
-                await _stopListening();
+                // User tapped to stop listening
+                await _listen.stopListening();
 
                 if (tutorialActive) {
                   setState(() => tutorialPaused = false);
@@ -623,13 +523,13 @@ class _MainPageState extends State<MainPage> {
                 }
 
               } else {
-                // User starts speaking → Pause tutorial
+                // User tapped to start listening
                 if (tutorialActive) {
                   setState(() => tutorialPaused = true);
-                  await _tts.stop(); // stop speaking immediately
+                  await _tts.stop();
                 }
 
-                await _startListening();
+                await _listen.startListening();
               }
             },
             child: AnimatedContainer(

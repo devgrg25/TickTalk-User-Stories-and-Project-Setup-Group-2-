@@ -266,9 +266,11 @@ class VoiceController {
     if (!available) return;
 
     await _speech.listen(
-      listenMode: stt.ListenMode.confirmation,
-      partialResults: false,
-      localeId: 'en_US',
+      listenOptions: stt.SpeechListenOptions(
+        listenMode: stt.ListenMode.confirmation,
+        partialResults: false,
+        localeId: 'en_US',
+      ),
       onResult: (res) {
         final words = res.recognizedWords.trim();
         if (words.isNotEmpty && res.finalResult) {
@@ -276,6 +278,7 @@ class VoiceController {
         }
       },
     );
+
   }
 
   Future<void> startListeningForControl({
@@ -283,7 +286,8 @@ class VoiceController {
   }) async {
     await initialize();
     await _speech.listen(
-      listenFor: const Duration(seconds: 5),
+      listenOptions: stt.SpeechListenOptions(
+      listenFor: const Duration(seconds: 5)),
       onResult: (result) {
         if (result.finalResult) {
           final words = result.recognizedWords.toLowerCase();

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'routines.dart';
-import 'routine_timer_model.dart';
+import '../timer_models/routine_timer_model.dart';
 import 'create_routine_page.dart';
 
 class RoutinesPage extends StatefulWidget {

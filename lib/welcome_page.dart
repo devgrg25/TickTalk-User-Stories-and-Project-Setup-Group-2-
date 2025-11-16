@@ -5,8 +5,8 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'homepage.dart';
 import 'create_timer_screen.dart';
-import 'stopwatchmodeselecter.dart';
-import 'stopwatch_normal_mode.dart';
+import 'stopwatch/stopwatchmodeselecter.dart';
+import 'stopwatch/stopwatch_normal_mode.dart';
 import 'MainPage.dart';
 
 class WelcomePage extends StatefulWidget {
@@ -228,7 +228,7 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
     super.dispose();
   }
 
-  // -------------------- UI --------------------
+  // -------------------- routines --------------------
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;

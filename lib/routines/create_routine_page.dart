@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
-import 'routine_timer_model.dart';
+import '../timer_models/routine_timer_model.dart';
 
 class CreateRoutinePage extends StatefulWidget {
   const CreateRoutinePage({super.key});
@@ -191,7 +191,7 @@ class _CreateRoutinePageState extends State<CreateRoutinePage> {
     Navigator.pop(context, newRoutine);
   }
 
-  // --- UI ---
+  // --- routines ---
   @override
   Widget build(BuildContext context) {
     const primaryBlue = Color(0xFF007BFF);

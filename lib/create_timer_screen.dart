@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'timer_model.dart';
+import 'timer_models/timer_model.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'voice_controller.dart';
+import 'controllers/voice_controller.dart';
 
 class CreateTimerScreen extends StatefulWidget {
   final TimerData? existingTimer;
@@ -193,7 +193,7 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
 
   }
 
-  // --- UI BUILDERS ---
+  // --- routines BUILDERS ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(

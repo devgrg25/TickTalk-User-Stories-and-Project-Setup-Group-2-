@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'settings_page.dart';
-import 'timer_model.dart';
-import 'voice_controller.dart';
+import 'timer_models/timer_model.dart';
+import 'controllers/voice_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   final List<TimerData> timers;

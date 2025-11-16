@@ -312,7 +312,7 @@ class _StopwatchPlayerModeState extends State<StopwatchPlayerMode>
         }
         commandRecognized = true;
       } else if (normalized.contains('show summary') || normalized.contains('summary') || normalized.contains('results') || normalized.contains('leaderboard') || normalized.contains('who was fastest') || normalized.contains('who was slowest')) {
-        // Show summary UI
+        // Show summary routines
         setState(() => _showSummary = true);
         await Future.delayed(const Duration(milliseconds: 300));
         final summary = _answerSummaryQuestion('summary');
@@ -1139,7 +1139,7 @@ class PlayerStopwatch {
   bool isRunning = false;
   Duration finalTime = Duration.zero;
 
-  // show/hide laps in UI
+  // show/hide laps in routines
   bool showLaps = false;
 
   final _elapsedController = StreamController<Duration>.broadcast();

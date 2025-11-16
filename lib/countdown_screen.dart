@@ -3,7 +3,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'timer_model.dart'; // To access the TimerData class
+import 'timer_models/timer_model.dart'; // To access the TimerData class
 
 class CountdownController {
   VoidCallback? _pause;
