@@ -1,24 +1,23 @@
 import 'package:flutter/material.dart';
-import 'UI/create_timer.dart';   // MUST MATCH FOLDER NAME EXACTLY
+import 'app_shell/main_shell.dart';
+
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 
 void main() {
-  runApp(const TimerApp());
+  runApp(const TickTalkApp());
 }
 
-class TimerApp extends StatelessWidget {
-  const TimerApp({super.key});
+class TickTalkApp extends StatelessWidget {
+  const TickTalkApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Timer App',
-
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0F0F0F),
-      ),
-
-      home: const CreateTimer(),   // MUST MATCH CLASS NAME EXACTLY
+      title: "TickTalk",
+      theme: ThemeData.dark(),
+      navigatorObservers: [routeObserver],
+      home: const MainShell(),
     );
   }
 }
