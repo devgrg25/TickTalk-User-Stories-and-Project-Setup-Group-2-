@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
@@ -5,6 +6,8 @@ import '../UI/home/home_page.dart';
 import '../UI/timer/create_timer_page.dart';
 import '../UI/routines/routines_page.dart';
 import 'voice_mic_bar.dart';
+import 'voice_router.dart';
+import '../logic/voice/voice_tts_service.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -19,13 +22,37 @@ class _MainShellState extends State<MainShell> {
   String _lastWords = "";
 
   Key createTimerKey = UniqueKey();
-  final GlobalKey<RoutinesPageState> routinesKey = GlobalKey<RoutinesPageState>();
+  final GlobalKey<RoutinesPageState> routinesKey =
+  GlobalKey<RoutinesPageState>();
 
   final stt.SpeechToText _speech = stt.SpeechToText();
+  late final VoiceRouter _voiceRouter;
 
   @override
   void initState() {
     super.initState();
+
+    // Initialize the voice router
+    _voiceRouter = VoiceRouter(
+      onNavigateTab: (int tabIndex) {
+        setState(() => _index = tabIndex);
+
+        // If we navigate to routines, refresh them
+        if (tabIndex == 2) {
+          routinesKey.currentState?.reload();
+        }
+      },
+
+      // 🔮 AI fallback for Hybrid C2:
+      // Right now this is just a placeholder.
+      // Later you can call your backend / OpenAI here.
+      aiFallback: (String rawText) async {
+        debugPrint("AI fallback would handle: $rawText");
+        await VoiceTtsService.instance.speak(
+          "I'm still learning to understand more complex phrases.",
+        );
+      },
+    );
   }
 
   void _returnHome() {
@@ -37,11 +64,19 @@ class _MainShellState extends State<MainShell> {
     if (!_isListening) {
       bool available = await _speech.initialize(
         onStatus: (status) {
+          if (kDebugMode) {
+            print("🎙 Status: $status");
+          }
           if (status.contains('notListening') || status.contains('done')) {
             setState(() => _isListening = false);
           }
         },
-        onError: (e) => debugPrint("❌ Speech error: $e"),
+        onError: (e) {
+          if (kDebugMode) {
+            print("❌ Speech error: $e");
+          }
+          setState(() => _isListening = false);
+        },
       );
 
       if (available) {
@@ -53,7 +88,11 @@ class _MainShellState extends State<MainShell> {
         await _speech.listen(
           onResult: (result) {
             setState(() => _lastWords = result.recognizedWords);
-            // Later: handle commands here
+
+            // When STT thinks the phrase is finished, send it to the router.
+            if (result.finalResult) {
+              _voiceRouter.handle(_lastWords);
+            }
           },
           listenMode: stt.ListenMode.dictation,
           partialResults: true,
@@ -89,6 +128,7 @@ class _MainShellState extends State<MainShell> {
           children: [
             IndexedStack(index: _index, children: screens),
 
+            // Bubble showing live transcription
             if (_isListening && _lastWords.isNotEmpty)
               Positioned(
                 left: 0,
@@ -96,14 +136,18 @@ class _MainShellState extends State<MainShell> {
                 bottom: 160,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.55),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       _lastWords,
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ),
