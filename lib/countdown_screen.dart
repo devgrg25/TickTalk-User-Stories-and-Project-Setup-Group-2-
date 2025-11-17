@@ -1,43 +1,37 @@
 // countdown_screen.dart
-import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
-import 'timer_models/timer_model.dart'; // To access the TimerData class
+import 'package:flutter_tts/flutter_tts.dart';
+import '../timer_models/timer_model.dart';
 
 class CountdownController {
   VoidCallback? _pause;
   VoidCallback? _resume;
-  VoidCallback? _stopSpeaking;
+  VoidCallback? _stop;
 
   void _bind({
     required VoidCallback pause,
     required VoidCallback resume,
-    required VoidCallback stopSpeaking,
+    required VoidCallback stop,
   }) {
     _pause = pause;
     _resume = resume;
-    _stopSpeaking = stopSpeaking;
+    _stop = stop;
   }
 
   void pause() => _pause?.call();
   void resume() => _resume?.call();
-  void stopSpeaking() => _stopSpeaking?.call();
+  void stopSpeaking() => _stop?.call();
 }
 
 class CountdownScreen extends StatefulWidget {
   final TimerData timerData;
   final VoidCallback? onBack;
-  final int startingSet = 1;
   final CountdownController? controller;
-  final bool tutorialMode;
-  final VoidCallback? onTutorialNext;
 
   const CountdownScreen({
     super.key,
     required this.timerData,
-    this.tutorialMode = false,
-    this.onTutorialNext,
     this.onBack,
     this.controller,
   });
@@ -47,65 +41,156 @@ class CountdownScreen extends StatefulWidget {
 }
 
 class _CountdownScreenState extends State<CountdownScreen> {
-  late FlutterTts _tts;
   late Timer _timer;
-  int _currentSeconds = 0;
-  int _elapsedTotalSeconds = 0;
-  String _currentPhase = 'Work';
-  late int _currentSet;
+  late FlutterTts _tts;
   bool _isPaused = false;
 
-  bool _audioFeedbackOn = true;
-  bool _hapticFeedbackOn = true;
+  int _elapsedTotalSeconds = 0;   // MASTER CLOCK
+  String _lastSpokenPhase = "";
 
+  // ------------------------------------------------------------
+  // INITIALIZATION
+  // ------------------------------------------------------------
   @override
   void initState() {
     super.initState();
+
     _tts = FlutterTts();
-    //_initTts();
-    _currentPhase = 'Work';
-    _currentSet = widget.startingSet;
-    _currentSeconds =
-        min(widget.timerData.workInterval * 60, widget.timerData.totalTime * 60);
+    _initTts();
 
     widget.controller?._bind(
       pause: _pauseTimer,
       resume: _resumeTimer,
-      stopSpeaking: () {
-        _tts.stop();
-      },
+      stop: () => _tts.stop(),
     );
-    _initTtsAndStart();
-  }
 
-  @override
-  void didUpdateWidget(covariant CountdownScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      widget.controller?._bind(
-        pause: _pauseTimer,
-        resume: _resumeTimer,
-        stopSpeaking: () {
-          _tts.stop();
-        },
-      );
-    }
-  }
-
-  Future<void> _initTtsAndStart() async {
-    await _initTts();
-    _startTimer();
+    _speakStartMessage();
+    _startTimerEngine();
   }
 
   Future<void> _initTts() async {
-    try {
-      await _tts.setLanguage('en-US');
-      await _tts.setPitch(1.0);
-      await _tts.setSpeechRate(0.5);
-      await _tts.awaitSpeakCompletion(true);
-    } catch (_) {
-      print("TTS initialization failed");
+    await _tts.setLanguage('en-US');
+    await _tts.setSpeechRate(0.5);
+    await _tts.awaitSpeakCompletion(true);
+  }
+
+  // Speak the initial description of the timer
+  Future<void> _speakStartMessage() async {
+    final workMin = widget.timerData.workInterval;
+    final breakMin = widget.timerData.breakInterval;
+    final sets = widget.timerData.totalSets;
+    final name = widget.timerData.name;
+
+    String message = 'Starting timer "$name". '
+        'Work for $workMin minutes, break for $breakMin minutes, '
+        'for $sets sets.';
+
+    await _tts.speak(message);
+  }
+
+  // ------------------------------------------------------------
+  // MASTER CLOCK ENGINE — Runs once per second
+  // ------------------------------------------------------------
+  void _startTimerEngine() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _isPaused) return;
+
+      setState(() {
+        _elapsedTotalSeconds++;
+      });
+
+      _speakPhaseAnnouncements();
+
+      if (_elapsedTotalSeconds >= totalSec) {
+        _finishTimer();
+      }
+    });
+  }
+
+  // ------------------------------------------------------------
+  // CALCULATIONS (Approach 1 — All derived from _elapsedTotalSeconds)
+  // ------------------------------------------------------------
+
+  int get workSec => widget.timerData.workInterval * 60;
+  int get breakSec => widget.timerData.breakInterval * 60;
+
+  // One full set duration (Work + Break)
+  int get cycleSec => workSec + breakSec;
+
+  // Total sets
+  int get totalSets => widget.timerData.totalSets;
+
+  // Total duration (no final break)
+  int get totalSec =>
+      workSec * totalSets + breakSec * (totalSets - 1);
+
+  // Which set we are in
+  int get currentSet => (_elapsedTotalSeconds ~/ cycleSec) + 1;
+
+  // Seconds into this set
+  int get secondsIntoSet => _elapsedTotalSeconds % cycleSec;
+
+  // Work or break phase
+  bool get inWorkPhase => secondsIntoSet < workSec;
+
+  // Remaining seconds in this phase
+  int get phaseRemaining {
+    if (inWorkPhase) {
+      return workSec - secondsIntoSet;
+    } else {
+      int intoBreak = secondsIntoSet - workSec;
+      return breakSec - intoBreak;
     }
+  }
+
+  // Remaining total
+  int get totalRemaining => totalSec - _elapsedTotalSeconds;
+
+  String get phaseLabel => inWorkPhase ? "Work" : "Break";
+
+  // ------------------------------------------------------------
+  // TTS Phase Announcements
+  // ------------------------------------------------------------
+  void _speakPhaseAnnouncements() {
+    if (_elapsedTotalSeconds == 0) return;
+
+    if (phaseLabel != _lastSpokenPhase) {
+      _lastSpokenPhase = phaseLabel;
+
+      if (phaseLabel == "Work") {
+        _tts.speak("Start working.");
+      } else {
+        _tts.speak("Take a break.");
+      }
+    }
+  }
+
+  // ------------------------------------------------------------
+  // PAUSE / RESUME / FINISH
+  // ------------------------------------------------------------
+  void _pauseTimer() {
+    setState(() => _isPaused = true);
+    _tts.speak("Timer paused.");
+  }
+
+  void _resumeTimer() {
+    setState(() => _isPaused = false);
+    _tts.speak("Resuming.");
+  }
+
+  void _finishTimer() {
+    _timer.cancel();
+    _tts.speak("Timer completed.");
+    widget.onBack?.call();
+  }
+
+  // ------------------------------------------------------------
+  // HELPER
+  // ------------------------------------------------------------
+  String _format(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return "${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
   }
 
   @override
@@ -115,132 +200,13 @@ class _CountdownScreenState extends State<CountdownScreen> {
     super.dispose();
   }
 
-  Future<void> _speakTimerDetails() async {
-    if (!_audioFeedbackOn) return; // Only speak if audio feedback is on
-
-    final workMin = widget.timerData.workInterval;
-    final breakMin = widget.timerData.breakInterval;
-    final sets = widget.timerData.totalSets;
-    final name = widget.timerData.name;
-
-    final message = 'Starting timer "$name". '
-        'Work for $workMin minutes, '
-        'then break for $breakMin minutes, '
-        'repeat for $sets sets.';
-
-    final messageSimple = 'Starting simple timer "$name". '
-        'for $workMin minutes, ';
-
-    try {
-      await _tts.stop(); // Stop any ongoing speech first
-
-      // Simple timer case: when sets == null OR sets == 1 and break is null
-      if (sets == 1) {
-        await _tts.speak(messageSimple);
-      } else {
-        await _tts.speak(message);
-      }
-
-    } catch (e) {
-      debugPrint('TTS error: $e');
-    }
-  }
-
-  Future<void> _speak(String message) async {
-    if (!_audioFeedbackOn) return; // Respect user toggle
-    try {
-      await _tts.stop();
-      await _tts.speak(message);
-    } catch (e) {
-      // Handle error if needed
-    }
-  }
-
-
-  void _startTimer() {
-    // Speak at the start of each phase
-    if (_audioFeedbackOn) {
-      if (_currentPhase == 'Work' && _currentSet == 1) {
-        _speakTimerDetails();
-      }
-      else if (_currentPhase == 'Work' && _currentSet != 1) {
-        _speak("Set $_currentSet: Work for ${widget.timerData.workInterval} minutes.");
-      }
-      else {
-        _speak("Time for a break of ${widget.timerData.breakInterval} minutes.");
-      }
-    }
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-
-      if (_elapsedTotalSeconds >= widget.timerData.totalTime * 60 ||
-          _currentSet > widget.timerData.totalSets) {
-        _timer.cancel();
-        if (mounted) {
-          widget.onBack?.call();
-        }
-        return;
-      }
-
-      if (!_isPaused) {
-        setState(() {
-          _elapsedTotalSeconds++;
-          if (_currentSeconds > 0) {
-            _currentSeconds--;
-          } else {
-            _timer.cancel();
-            // Speak a short voice note at the end of the phase
-            if (_audioFeedbackOn) {
-              if (_currentPhase == 'Work') {
-                _speak("Work session completed. Take a short break.");
-              } else {
-                _speak("Break over. Starting the next set.");
-              }
-            }
-            _togglePhase();
-            _startTimer();
-          }
-        });
-      }
-    });
-  }
-
-
-  void _togglePhase() {
-    //bool finishedSet = false;
-
-    if (_currentPhase == 'Break') {
-      _currentSet++;
-      //finishedSet = true;
-      if (_currentSet > widget.timerData.totalSets) {
-        return;
-      }
-    }
-
-    _currentPhase = (_currentPhase == 'Work') ? 'Break' : 'Work';
-
-    final nextPhaseDuration = (_currentPhase == 'Work'
-        ? widget.timerData.workInterval
-        : widget.timerData.breakInterval) * 60;
-
-    final remainingTotalTime =
-        (widget.timerData.totalTime * 60) - _elapsedTotalSeconds;
-
-    _currentSeconds = min(nextPhaseDuration, remainingTotalTime);
-  }
-
-  String _formatTime(int totalSeconds) {
-    int minutes = totalSeconds ~/ 60;
-    int seconds = totalSeconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-
+  // ------------------------------------------------------------
+  // UI — Restored from your original design
+  // ------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    // --- COLOR PALETTE FROM HomeScreen ---
     const Color cardBackground = Color(0xFFF9FAFB);
-    const Color cardBorder = Color(0xFFE5E7EB); // Equivalent to grey.shade300
+    const Color cardBorder = Color(0xFFE5E7EB);
     const Color textColor = Colors.black;
     const Color subtextColor = Colors.black54;
 
@@ -250,20 +216,14 @@ class _CountdownScreenState extends State<CountdownScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text('Active Timer', style: TextStyle(color: textColor)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none_outlined, color: textColor),
-            onPressed: () {},
-          ),
-        ],
       ),
-      // MODIFICATION 1: Wrap the body's content in a SingleChildScrollView
+
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              // "Current Timer" card
+              // ---- CURRENT TIMER NAME ----
               Card(
                 elevation: 0,
                 color: cardBackground,
@@ -271,19 +231,18 @@ class _CountdownScreenState extends State<CountdownScreen> {
                     borderRadius: BorderRadius.circular(12),
                     side: const BorderSide(color: cardBorder)),
                 child: ListTile(
-                  title: const Text('Current Timer', style: TextStyle(fontSize: 12, color: subtextColor)),
-                  subtitle: Text(
-                    widget.timerData.name,
-                    style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: textColor),
-                  ),
+                  title: const Text('Current Timer',
+                      style: TextStyle(fontSize: 12, color: subtextColor)),
+                  subtitle: Text(widget.timerData.name,
+                      style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: textColor)),
                 ),
               ),
               const SizedBox(height: 24),
 
-              // Main timer display card
+              // ---- MAIN TIMER DISPLAY ----
               Card(
                 elevation: 0,
                 color: cardBackground,
@@ -296,117 +255,45 @@ class _CountdownScreenState extends State<CountdownScreen> {
                   child: Column(
                     children: [
                       Text(
-                        'Set $_currentSet of ${widget.timerData.totalSets}',
+                        'Set $currentSet of ${widget.timerData.totalSets}',
                         style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: textColor.withOpacity(0.7)),
                       ),
                       const SizedBox(height: 8),
+
                       Text(
-                        _formatTime(_currentSeconds),
+                        _format(phaseRemaining),
                         style: const TextStyle(
                             fontSize: 80,
                             fontWeight: FontWeight.bold,
                             color: textColor),
                       ),
                       const SizedBox(height: 8),
+
                       Text(
-                        'Elapsed: ${_formatTime(_elapsedTotalSeconds)} / Total: ${_formatTime(widget.timerData.totalTime)}',
+                        'Phase: $phaseLabel',
+                        style:
+                        TextStyle(fontSize: 16, color: textColor.withOpacity(0.6)),
+                      ),
+                      const SizedBox(height: 8),
+
+                      Text(
+                        'Elapsed: ${_format(_elapsedTotalSeconds)} / Total: ${_format(totalSec)}',
                         style: TextStyle(
-                            fontSize: 16,
-                            color: textColor.withOpacity(0.7)),
+                            fontSize: 16, color: textColor.withOpacity(0.7)),
                       ),
                     ],
                   ),
                 ),
               ),
+
               const SizedBox(height: 24),
-
-              // Feedback controls card
-              Card(
-                elevation: 0,
-                color: cardBackground,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: const BorderSide(color: cardBorder)),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildFeedbackToggle(
-                        icon: Icons.volume_up_outlined,
-                        label: 'Audio Feedback',
-                        isOn: _audioFeedbackOn,
-                        onChanged: (value) {
-                          setState(() => _audioFeedbackOn = value);
-                        },
-                      ),
-                      _buildFeedbackToggle(
-                        icon: Icons.vibration_outlined,
-                        label: 'Haptic Feedback',
-                        isOn: _hapticFeedbackOn,
-                        onChanged: (value) {
-                          setState(() => _hapticFeedbackOn = value);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // MODIFICATION 2: Replace Spacer() with a SizedBox for consistent spacing
-              const SizedBox(height: 32),
-              const SizedBox(height: 16), // Padding at the very bottom
             ],
           ),
         ),
       ),
     );
-  }
-  // Helper widget for the feedback toggles
-  Widget _buildFeedbackToggle({
-    required IconData icon,
-    required String label,
-    required bool isOn,
-    required ValueChanged<bool> onChanged,
-  }) {
-    // UPDATED: Using the color palette from HomeScreen
-    const Color primaryBlue = Color(0xFF007BFF);
-    const Color inactiveGrey = Colors.grey;
-
-    return Column(
-      children: [
-        Icon(
-          icon,
-          color: isOn ? primaryBlue : inactiveGrey,
-        ),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-        Switch(
-          value: isOn,
-          onChanged: onChanged,
-          activeTrackColor: primaryBlue.withOpacity(0.3),
-          activeColor: primaryBlue,
-        ),
-      ],
-    );
-  }
-  void _pauseTimer() {
-    if (_isPaused) return;
-    setState(() {
-      _isPaused = true;
-    });
-    _timer.cancel();
-    _speak("Timer paused.");
-  }
-
-  void _resumeTimer() {
-    if (!_isPaused) return;
-    setState(() {
-      _isPaused = false;
-    });
-    _startTimer();
-    _speak("Resumed.");
   }
 }

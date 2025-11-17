@@ -12,6 +12,10 @@ class HomeScreen extends StatefulWidget {
   final void Function(int) onSwitchTab;
   final Function(TimerData) onStartTimer;
   final TimerData? activeTimer;
+  final VoidCallback onShowCountdown;
+  final bool isPaused;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
 
   const HomeScreen({
     super.key,
@@ -22,6 +26,10 @@ class HomeScreen extends StatefulWidget {
     required this.onSwitchTab,
     required this.onStartTimer,
     this.activeTimer,
+    required this.onShowCountdown,
+    required this.isPaused,
+    required this.onPause,
+    required this.onResume
   });
 
   @override
@@ -154,21 +162,26 @@ class HomeScreenState extends State<HomeScreen> {
                     return TimerCard(
                       timer: timer,
                       isActive: isActive,
+                      isPaused: widget.isPaused,
                       activeTime: isActive ? widget.activeTimer!.totalTime : null,
                       title: timer.name,
-                      status: isActive ? 'Active' : 'Ready',
+                      status: isActive
+                          ? (widget.isPaused ? "Paused" : "Active")
+                          : "Ready",
                       feedback: 'Audio + Haptic',
                       color: isActive ? Colors.green : const Color(0xFF007BFF),
-                      onPlay: () {
+                      onPause: widget.onPause,
+                      onResume: () {
                         if (!isActive) {
                           widget.onStartTimer(timer);
+                        } else {
+                          widget.onResume();
                         }
-                        else {
-                          widget.onPlayTimer(timer);
-                        }
+                        widget.onShowCountdown();
                       },
                       onEdit: () => widget.onEditTimer(timer),
                       onDelete: () => widget.onDeleteTimer(timer.id),
+                      onTap: isActive ? widget.onShowCountdown : null,
                     );
 
                   },
@@ -196,11 +209,15 @@ class TimerCard extends StatelessWidget {
   final String status;
   final String feedback;
   final Color color;
-  final VoidCallback onPlay;
+  //final VoidCallback onPlay;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final bool isActive;
   final int? activeTime; // remaining time if active
+  final VoidCallback? onTap;
+  final bool isPaused;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
 
 
   const TimerCard({
@@ -210,16 +227,23 @@ class TimerCard extends StatelessWidget {
     required this.status,
     required this.feedback,
     required this.color,
-    required this.onPlay,
+    //required this.onPlay,
     required this.onEdit,
     required this.onDelete,
-    required this.isActive,     // NEW
+    required this.isActive,
     this.activeTime,
+    this.onTap,
+    required this.isPaused,
+    required this.onPause,
+    required this.onResume
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+
+    return GestureDetector(
+    onTap: onTap,
+    child: Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -258,9 +282,19 @@ class TimerCard extends StatelessWidget {
               style: const TextStyle(fontSize: 14, color: Colors.black54)),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            IconButton(
-                onPressed: onPlay,
-                icon: const Icon(Icons.play_arrow, color: Colors.black54)),
+            if (isActive)
+              IconButton(
+                onPressed: isPaused ? onResume : onPause,
+                icon: Icon(
+                  isPaused ? Icons.play_arrow : Icons.pause,
+                  color: Colors.black54,
+                ),
+              )
+            else
+              IconButton(
+                onPressed: onResume,   // treat play as "resume/start"
+                icon: const Icon(Icons.play_arrow, color: Colors.black54),
+              ),
             IconButton(
                 onPressed: onEdit,
                 icon: const Icon(Icons.edit_outlined, color: Colors.black54)),
@@ -271,6 +305,7 @@ class TimerCard extends StatelessWidget {
           ]),
         ],
       ),
+    ),
     );
   }
 }

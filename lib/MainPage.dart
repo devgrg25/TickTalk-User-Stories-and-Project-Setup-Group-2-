@@ -231,13 +231,6 @@ class _MainPageState extends State<MainPage> {
     await _saveTimers();
   }
 
-  void _addTimer(TimerData newTimer) async {
-    setState(() {
-      _timers.add(newTimer);
-    });
-    await _saveTimers();
-  }
-
   // ---------- TTS ----------
   Future<void> _speak(String text) async {
     try {
@@ -438,6 +431,12 @@ class _MainPageState extends State<MainPage> {
       onSwitchTab: _switchTab,
       onStartTimer: _startTimer,
       activeTimer: _activeTimer,
+      onShowCountdown: () {
+        setState(() => _showingCountdown = true);
+      },
+      isPaused: _activeTimer != null && _ticker == null,
+      onPause: _pauseTimer,
+      onResume: _resumeTimer,
     ),
     // ValueKey forces Create page to rebuild when voice prefills change
     CreateTimerScreen(
@@ -486,7 +485,7 @@ class _MainPageState extends State<MainPage> {
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_activeTimer != null) _buildActiveTimerBanner(),
+          //if (_activeTimer != null) _buildActiveTimerBanner(),
           BottomNavigationBar(
             selectedItemColor: _showingCountdown
                 ? Colors.grey             // No highlight when countdown is showing
@@ -555,53 +554,6 @@ class _MainPageState extends State<MainPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ---------- BANNER ----------
-  Widget _buildActiveTimerBanner() {
-    final active = _activeTimer;
-    if (active == null) return const SizedBox.shrink();
-
-    return GestureDetector(
-      onTap: () => setState(() => _showingCountdown = true), // <-- FULL BANNER IS TAPPABLE
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        color: Colors.blue.withOpacity(0.12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // Name + status
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  active.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const Text("Timer Running"),
-              ],
-            ),
-
-            // Remaining time (no underline now, since whole banner is clickable)
-            Text(
-              _formatMMSS(active.totalTime),
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
-            ),
-
-            // Stop button still works independently
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.red),
-              onPressed: _stopTimer,
-              tooltip: 'Stop timer',
-            ),
-          ],
-        ),
       ),
     );
   }
