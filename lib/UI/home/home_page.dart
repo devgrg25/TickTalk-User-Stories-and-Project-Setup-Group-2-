@@ -8,6 +8,8 @@ import '../theme/app_background.dart';
 import '../widgets/animated_page_title.dart';
 import '../timer/countdown_page.dart';
 
+import 'package:ticktalk_app/logic/haptics/haptics_service.dart';
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -22,7 +24,7 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
 
-    // Listen for timer updates
+    // Listen for timer changes
     sub = TimerManager.instance.onChange.listen((_) {
       if (mounted) setState(() {});
     });
@@ -46,6 +48,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // 🔔 Test haptic vibration
+  Future<void> _testVibration() async {
+    debugPrint("Sending haptic test pulse...");
+    HapticsService.instance.countdownPulse();
+  }
+
   @override
   Widget build(BuildContext context) {
     final timers = TimerManager.instance.timers;
@@ -65,6 +73,7 @@ class _HomePageState extends State<HomePage> {
                   letterSpacing: 2,
                 ),
               ),
+
               const SizedBox(height: 4),
               const AnimatedPageTitle(title: "TickTalk"),
               const SizedBox(height: 30),
@@ -109,34 +118,6 @@ class _HomePageState extends State<HomePage> {
                               : Colors.white70,
                         ),
                       ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (t.controller.isRunning)
-                            IconButton(
-                              icon: const Icon(Icons.pause, color: Colors.yellow),
-                              onPressed: () {
-                                t.controller.pause();
-                                TimerManager.instance.forceUpdate();
-                              },
-                            ),
-
-                          if (!t.controller.isRunning && !t.finished)
-                            IconButton(
-                              icon: const Icon(Icons.play_arrow, color: Colors.green),
-                              onPressed: () {
-                                t.controller.resume();
-                                TimerManager.instance.forceUpdate();
-                              },
-                            ),
-
-                          IconButton(
-                            icon: const Icon(Icons.close, color: Colors.red),
-                            onPressed: () => TimerManager.instance.stopTimer(t.id),
-                          ),
-                        ],
-                      ),
-
                     );
                   },
                 ),
@@ -144,6 +125,11 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
+      ),
+
+      floatingActionButton: FloatingActionButton(
+        onPressed: _testVibration,
+        child: const Icon(Icons.vibration),
       ),
     );
   }

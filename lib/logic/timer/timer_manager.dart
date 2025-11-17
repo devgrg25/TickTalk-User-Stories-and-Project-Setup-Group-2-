@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'timer_controller.dart';
 import 'timer_interval.dart';
+import 'package:ticktalk_app/logic/voice/voice_service.dart';
+import 'package:ticktalk_app/logic/voice/voice_tts_service.dart';
+
 
 class ActiveTimer {
   final String id;
@@ -49,6 +52,12 @@ class TimerManager {
     controller.onTick = () {
       _emit(); // ⬅ notify UI every second
     };
+    // controller.onIntervalStart = (interval) {
+    //   VoiceTtsService.instance.speak(
+    //       "Starting ${interval.name}. ${interval.seconds} seconds."
+    //   );
+    // };
+
 
 
     controller.start();

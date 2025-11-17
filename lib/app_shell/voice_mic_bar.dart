@@ -58,52 +58,66 @@ class _VoiceMicBarState extends State<VoiceMicBar>
           t,
         )!;
 
-        return GestureDetector(
+        final semanticsLabel = widget.isListening
+            ? "Stop voice listening"
+            : "Start voice listening";
+
+        final semanticsHint = widget.isListening
+            ? "Double tap to stop recording your voice commands."
+            : "Double tap to start giving voice commands.";
+
+        return Semantics(
+          button: true,
+          label: semanticsLabel,
+          hint: semanticsHint,
           onTap: widget.onTap,
-          child: Container(
-            height: 140,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [bg1, bg2],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-            ),
-            child: Center(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                width: 90,
-                height: 90,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const RadialGradient(
-                    colors: [
-                      Color(0xFF2A2A2A),
-                      Color(0xFF0F0F0F),
-                    ],
-                  ),
-                  boxShadow: widget.isListening
-                      ? [
-                    BoxShadow(
-                      color: glowColor.withOpacity(0.45),
-                      blurRadius: 42,
-                      spreadRadius: 5,
-                    ),
-                    BoxShadow(
-                      color: glowColor.withOpacity(0.20),
-                      blurRadius: 70,
-                      spreadRadius: 14,
-                    ),
-                  ]
-                      : [],
+          child: GestureDetector(
+            onTap: widget.onTap,
+            child: Container(
+              height: 140,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [bg1, bg2],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                child: Icon(
-                  widget.isListening ? Icons.mic : Icons.mic_none,
-                  size: 36,
-                  color: Colors.white.withOpacity(
-                    widget.isListening ? 1.0 : 0.65,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+              ),
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const RadialGradient(
+                      colors: [
+                        Color(0xFF2A2A2A),
+                        Color(0xFF0F0F0F),
+                      ],
+                    ),
+                    boxShadow: widget.isListening
+                        ? [
+                      BoxShadow(
+                        color: glowColor.withOpacity(0.45),
+                        blurRadius: 42,
+                        spreadRadius: 5,
+                      ),
+                      BoxShadow(
+                        color: glowColor.withOpacity(0.20),
+                        blurRadius: 70,
+                        spreadRadius: 14,
+                      ),
+                    ]
+                        : [],
+                  ),
+                  child: Icon(
+                    widget.isListening ? Icons.mic : Icons.mic_none,
+                    size: 36,
+                    color: Colors.white.withOpacity(
+                      widget.isListening ? 1.0 : 0.65,
+                    ),
                   ),
                 ),
               ),

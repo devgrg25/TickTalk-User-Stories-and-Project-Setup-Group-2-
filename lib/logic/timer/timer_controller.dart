@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:ticktalk_app/logic/voice/voice_tts_service.dart';
+import 'package:ticktalk_app/logic/haptics/haptics_service.dart';
 
 class TimerInterval {
   final String name;
@@ -18,6 +20,7 @@ class TimerController {
   bool isPaused = false;
   Timer? _ticker;
 
+  /// Callbacks
   VoidCallback? onTick;
   VoidCallback? onIntervalComplete;
   VoidCallback? onTimerComplete;
@@ -27,6 +30,7 @@ class TimerController {
       throw Exception("TimerController created with no intervals.");
     }
     _setCurrentInterval(0);
+    _announceStartOfInterval();
   }
 
   static String format(int sec) {
@@ -42,25 +46,14 @@ class TimerController {
     });
   }
 
-  void pause() {
-    isPaused = true;
-  }
-
-  void resume() {
-    isPaused = false;
-  }
+  void pause() => isPaused = true;
+  void resume() => isPaused = false;
 
   bool get isRunning => _ticker != null && !isPaused;
   bool get isStopped => _ticker == null;
 
-  // bool get isRunning => _ticker != null && !isPaused;
-  // bool get isStopped => _ticker == null;
-
-
   void addTime(int sec) {
-    if (remainingSeconds != null) {
-      remainingSeconds = (remainingSeconds! + sec).clamp(0, 999999);
-    }
+    remainingSeconds = (remainingSeconds + sec).clamp(0, 999999);
   }
 
   void stop() {
@@ -69,34 +62,62 @@ class TimerController {
   }
 
   void _tick() {
-    if (remainingSeconds == null) return;
+    if (remainingSeconds > 0) {
+      remainingSeconds -= 1;
 
-    if (remainingSeconds! > 0) {
-      remainingSeconds = remainingSeconds! - 1;
+      /// Voice warnings + haptics
+      if (remainingSeconds == 10) {
+        VoiceTtsService.instance.speak("10 seconds remaining.");
+      } else if (remainingSeconds == 5) {
+        VoiceTtsService.instance.speak("5 seconds remaining.");
+      } else if (remainingSeconds == 3 ||
+          remainingSeconds == 2 ||
+          remainingSeconds == 1) {
+        HapticsService.instance.countdownPulse();
+      }
+
       onTick?.call();
       return;
     }
 
-    _nextInterval();
+    _advanceToNextInterval();
   }
 
   void _setCurrentInterval(int index) {
     _currentIndex = index;
     current = intervals[index];
     remainingSeconds = current!.seconds;
-
     next = index + 1 < intervals.length ? intervals[index + 1] : null;
   }
 
-  void _nextInterval() {
+  void _advanceToNextInterval() {
     onIntervalComplete?.call();
 
     final newIndex = _currentIndex + 1;
     if (newIndex >= intervals.length) {
       stop();
+      VoiceTtsService.instance.speak("Routine complete.");
+      HapticsService.instance.finishLong(); // long vibration on completion
       onTimerComplete?.call();
       return;
     }
+
     _setCurrentInterval(newIndex);
+    _announceStartOfInterval();
+  }
+
+  void _announceStartOfInterval() {
+    if (current == null) return;
+    final text = _formatSpokenName(current!.name);
+    VoiceTtsService.instance.speak(
+        "Starting $text for ${current!.seconds} seconds."
+    );
+  }
+
+  /// Fix shouting names: "HIGH KNEES" → "High knees"
+  String _formatSpokenName(String text) {
+    if (text.isEmpty) return text;
+    final lower = text.toLowerCase();
+    return lower[0].toUpperCase() + lower.substring(1);
   }
 }
