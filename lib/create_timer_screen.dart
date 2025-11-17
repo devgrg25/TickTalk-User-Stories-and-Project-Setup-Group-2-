@@ -17,12 +17,14 @@ class CreateTimerScreen extends StatefulWidget {
 }
 
 class _CreateTimerScreenState extends State<CreateTimerScreen> {
-  final _nameController = TextEditingController();
   late FlutterTts _tts;
+  final stt.SpeechToText _speech = stt.SpeechToText();
+
+  final _nameController = TextEditingController();
   final _workIntervalController = TextEditingController();
   final _breakIntervalController = TextEditingController();
   final _setsController = TextEditingController();
-  final stt.SpeechToText _speech = stt.SpeechToText();
+
   bool _isListening = false;
   String _lastHeard = "This shows the last spoken command";
 

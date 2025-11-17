@@ -228,10 +228,6 @@ class _CountdownScreenState extends State<CountdownScreen> {
         (widget.timerData.totalTime * 60) - _elapsedTotalSeconds;
 
     _currentSeconds = min(nextPhaseDuration, remainingTotalTime);
-
-    //if (finishedSet) {
-    //  _speak("Great job! You've completed set ${_currentSet - 1}.");
-    //}
   }
 
   String _formatTime(int totalSeconds) {
@@ -243,16 +239,10 @@ class _CountdownScreenState extends State<CountdownScreen> {
   @override
   Widget build(BuildContext context) {
     // --- COLOR PALETTE FROM HomeScreen ---
-    const Color primaryBlue = Color(0xFF007BFF);
-    const Color breakGreen = Colors.green; // Same as 'Completed' status
     const Color cardBackground = Color(0xFFF9FAFB);
     const Color cardBorder = Color(0xFFE5E7EB); // Equivalent to grey.shade300
-    const Color inactiveGrey = Colors.grey;
     const Color textColor = Colors.black;
     const Color subtextColor = Colors.black54;
-
-    // Determine the active color based on the current phase
-    final Color activeColor = _currentPhase == 'Work' ? primaryBlue : breakGreen;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -260,13 +250,6 @@ class _CountdownScreenState extends State<CountdownScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: const Text('Active Timer', style: TextStyle(color: textColor)),
-        //centerTitle: true,
-        /*leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: textColor),
-          onPressed: () {
-            widget.onBack?.call();
-          },
-        ),*/
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_none_outlined, color: textColor),
@@ -375,29 +358,6 @@ class _CountdownScreenState extends State<CountdownScreen> {
 
               // MODIFICATION 2: Replace Spacer() with a SizedBox for consistent spacing
               const SizedBox(height: 32),
-
-              // "Tap to Speak" button
-            /*
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.mic, size: 24),
-                  label: const Text(
-                    'Tap to Speak',
-                    style: TextStyle(fontSize: 18),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: activeColor, // UPDATED: Dynamic color
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                  ),
-                ),
-              ),
-              */
               const SizedBox(height: 16), // Padding at the very bottom
             ],
           ),
