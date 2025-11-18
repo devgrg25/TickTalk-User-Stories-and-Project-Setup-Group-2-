@@ -1,8 +1,10 @@
+// main_page.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
+
 import 'stopwatch/stopwatch_normal_mode.dart';
 import 'homepage.dart';
 import 'create_timer_screen.dart';
@@ -29,20 +31,19 @@ class _MainPageState extends State<MainPage> {
   bool _showingCountdown = false;
   bool _isListening = false;
 
-  // Tutorial variables
+  // Tutorial
   bool tutorialActive = false;
   bool tutorialPaused = false;
   int tutorialStep = 0;
 
-  // Create timer variables
+  // Timers
   TimerData? _editingTimer;
   TimerData? _activeTimer;
-  Timer? _ticker;
+  Timer? _ticker; // single global ticker
 
   final FlutterTts _tts = FlutterTts();
   final VoiceController _voiceController = VoiceController();
   late final PredefinedRoutines _routines;
-  final CountdownController _countdownController = CountdownController();
 
   List<TimerData> _timers = [];
   TimerData? _voiceFilledTimer;
@@ -51,8 +52,8 @@ class _MainPageState extends State<MainPage> {
 
   static const String _timersKey = 'saved_timers_list';
 
-  // --- 1. DEFINE THE GLOBAL KEY FOR ROUTINES PAGE ---
-  final GlobalKey<RoutinesPageState> _routinesKey = GlobalKey<RoutinesPageState>();
+  final GlobalKey<RoutinesPageState> _routinesKey =
+  GlobalKey<RoutinesPageState>();
 
   // ---------- INIT / DISPOSE ----------
   @override
@@ -63,13 +64,11 @@ class _MainPageState extends State<MainPage> {
         _startTutorial();
       }
     });
-    // TTS once
+
     _initTts();
 
     _listen = ListenController(
       voice: _voiceController,
-      countdown: _countdownController,
-      routinesKey: _routinesKey,
       getIsListening: () => _isListening,
       setIsListening: (v) => _isListening = v,
       getTutorialActive: () => tutorialActive,
@@ -88,6 +87,7 @@ class _MainPageState extends State<MainPage> {
       getTimers: () => _timers,
       generateUniqueName: _generateUniqueTimerName,
       stopPageTts: () => _tts.stop(),
+      routinesKey: _routinesKey,
       mounted: () => mounted,
       setState: setState,
     );
@@ -106,49 +106,8 @@ class _MainPageState extends State<MainPage> {
       await _tts.setLanguage('en-US');
       await _tts.setSpeechRate(0.9);
     } catch (_) {
-      // swallow; device/engine variance
+      // swallow device differences
     }
-  }
-
-  void _pauseTimer() {
-    if (_ticker == null) return;
-    _ticker!.cancel();
-    _ticker = null;
-    _speak("Timer paused.");
-  }
-
-  void _resumeTimer() {
-    if (_activeTimer == null || _ticker != null) return;
-
-    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return;
-      final current = _activeTimer!;
-      final remaining = current.totalTime;
-
-      if (remaining <= 0) {
-        _stopTimer();
-        return;
-      }
-
-      setState(() {
-        _activeTimer = current.copyWith(totalTime: remaining - 1);
-      });
-    });
-
-    _speak("Resuming timer.");
-  }
-
-  void _stopTimer() {
-    _ticker?.cancel();
-    _ticker = null;
-
-    if (!mounted) return;
-    setState(() {
-      _activeTimer = null;
-      _showingCountdown = false;
-    });
-
-    _speak("Timer stopped.");
   }
 
   String _generateUniqueTimerName(List<TimerData> timers) {
@@ -214,7 +173,8 @@ class _MainPageState extends State<MainPage> {
   void _editTimer(TimerData timerToEdit) {
     setState(() {
       _editingTimer = timerToEdit;
-      _voiceFilledTimer = null;   // prevent voice timer from overwriting edit data
+      _voiceFilledTimer =
+      null; // prevent voice timer from overwriting edit data
       _tabIndex = 1;
     });
   }
@@ -240,9 +200,8 @@ class _MainPageState extends State<MainPage> {
     }
   }
 
-  // ---------- TIMER CONTROL ----------
+  // ---------- TIMER ENGINE ----------
   void _playTimerV(TimerDataV timerToPlay) {
-    // Left as-is per your code; safe isolate
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -257,12 +216,12 @@ class _MainPageState extends State<MainPage> {
 
   void _startTimer(TimerData timerData) {
     // Ignore zero/negative durations
-    if ((timerData.totalTime) <= 0) {
+    if (timerData.totalTime <= 0) {
       _speak("Timer duration is zero.");
       return;
     }
 
-    // If this exact timer is already active, do nothing
+    // If this exact timer is already active, and ticking, do nothing
     if (_activeTimer?.id == timerData.id && (_ticker?.isActive ?? false)) {
       return;
     }
@@ -272,12 +231,10 @@ class _MainPageState extends State<MainPage> {
 
     if (!mounted) return;
     setState(() {
-      // Use a detached copy to mutate countdown independently from list item
       _activeTimer = timerData.copyWith();
-      _showingCountdown = true; // show fullscreen initially
+      _showingCountdown = true; // show fullscreen
     });
 
-    // Periodic ticker
     _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
@@ -288,7 +245,6 @@ class _MainPageState extends State<MainPage> {
         return;
       }
 
-      // Basic single-phase countdown
       final current = _activeTimer!;
       final remaining = current.totalTime;
 
@@ -296,42 +252,81 @@ class _MainPageState extends State<MainPage> {
         timer.cancel();
         if (!mounted) return;
 
-        // Speak first (optional delay before screen change)
         _speak("Time's up.");
 
-        // Safely return to home after a short delay
         Future.delayed(const Duration(milliseconds: 400), () {
           if (!mounted) return;
           setState(() {
             _activeTimer = null;
             _showingCountdown = false;
-            _tabIndex = 0; // ✅ ensures home screen is shown
+            _tabIndex = 0;
           });
         });
         return;
       }
 
-      // Decrement by 1s
       setState(() {
         _activeTimer = current.copyWith(totalTime: remaining - 1);
       });
     });
   }
 
-  // Called when Create page saves a timer
-  void _handleSaveTimer(TimerData timer) {
-    _addOrUpdateTimer(timer);
-    _startTimer(timer);
+  void _pauseTimer() {
+    if (_ticker == null) return;
+    _ticker!.cancel();
+    _ticker = null;
+    _speak("Timer paused.");
+    setState(() {}); // to refresh isPaused in HomeScreen
+  }
+
+  void _resumeTimer() {
+    if (_activeTimer == null || _ticker != null) return;
+
+    _speak("Resuming timer.");
+
+    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_activeTimer == null) {
+        timer.cancel();
+        return;
+      }
+
+      final current = _activeTimer!;
+      final remaining = current.totalTime;
+
+      if (remaining <= 0) {
+        timer.cancel();
+        _speak("Time's up.");
+        setState(() {
+          _activeTimer = null;
+          _showingCountdown = false;
+          _tabIndex = 0;
+        });
+        return;
+      }
+
+      setState(() {
+        _activeTimer = current.copyWith(totalTime: remaining - 1);
+      });
+    });
+
+    setState(() {}); // refresh isPaused
+  }
+
+  void _stopTimer() {
+    _ticker?.cancel();
+    _ticker = null;
 
     if (!mounted) return;
     setState(() {
-      _editingTimer = null;
-      _voiceFilledTimer = null;
-      _showingCountdown = true; // jump into fullscreen view
+      _activeTimer = null;
+      _showingCountdown = false;
     });
+
+    _speak("Timer stopped.");
   }
 
-  //-----------Tutorial functions----------------
+  // ---------- Tutorial (unchanged from your logic) ----------
   void _endTutorial() async {
     setState(() {
       tutorialActive = false;
@@ -352,73 +347,64 @@ class _MainPageState extends State<MainPage> {
   }
 
   Future<void> _runTutorial() async {
-    if (!mounted || tutorialPaused == true) return;
+    if (!mounted || tutorialPaused) return;
 
     switch (tutorialStep) {
-    // STEP 0 — Create Timer Page
       case 0:
         setState(() => _tabIndex = 1);
         await _speakWait(
-            'This is the timer creation page. Here is a step by step guide on how to use it. '
-                'One: enter a timer name. Two: set work minutes. Three: set break minutes. Four: set the number of sets. '
-                'You can also say: Start a study timer for four sets with twenty five minutes work and five minutes break.'
+          'This is the timer creation page. Here is a step by step guide on how to use it. '
+              'One: enter a timer name. Two: set work minutes. Three: set break minutes. Four: set the number of sets. '
+              'You can also say: Start a study timer for four sets with twenty five minutes work and five minutes break.',
         );
         tutorialStep++;
         break;
 
-    // STEP 1 — Stopwatch Selector
       case 1:
         setState(() => _tabIndex = 4);
         await _speakWait(
-            'This is the stopwatch selector. Choose Normal Mode for a single stopwatch with voice control, '
-                'or Player Mode to track up to six players.'
+          'This is the stopwatch selector. Choose Normal Mode for a single stopwatch with voice control, '
+              'or Player Mode to track up to six players.',
         );
         tutorialStep++;
         break;
 
-    // STEP 2 — Normal Mode Page
       case 2:
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const StopwatchNormalMode(autoStart: false)),
+          MaterialPageRoute(
+            builder: (_) => const StopwatchNormalMode(autoStart: false),
+          ),
         );
         await Future.delayed(const Duration(milliseconds: 200));
         await _speakWait(
-            'This is Normal Mode. Say start to begin, stop to pause, lap to mark a lap, and reset to clear it.'
+          'This is Normal Mode. Say start to begin, stop to pause, lap to mark a lap, and reset to clear it.',
         );
         tutorialStep++;
         break;
 
-    // TUTORIAL DONE
       default:
         tutorialActive = false;
-        await _speakWait("Tutorial complete. You can now explore the app freely.");
+        await _speakWait(
+          "Tutorial complete. You can now explore the app freely.",
+        );
         break;
     }
 
-    // Continue automatically unless paused
     if (tutorialActive && !tutorialPaused) {
       _runTutorial();
     }
   }
+
   Future<void> _speakWait(String text) async {
     await _tts.stop();
     await _tts.setSpeechRate(0.45);
     await _tts.awaitSpeakCompletion(true);
     await _tts.speak(text);
 
-    // Wait here if paused (speech will be frozen)
     while (tutorialPaused) {
       await Future.delayed(const Duration(milliseconds: 200));
     }
-  }
-
-
-  // ---------- routines HELPERS ----------
-  String _formatMMSS(int secondsTotal) {
-    final m = secondsTotal ~/ 60;
-    final s = secondsTotal % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
   // ---------- PAGES ----------
@@ -438,23 +424,32 @@ class _MainPageState extends State<MainPage> {
       onPause: _pauseTimer,
       onResume: _resumeTimer,
     ),
-    // ValueKey forces Create page to rebuild when voice prefills change
     CreateTimerScreen(
       key: ValueKey(_voiceFilledTimer?.id ?? 'create_static'),
       existingTimer: _editingTimer ?? _voiceFilledTimer,
       onSaveTimer: _handleSaveTimer,
-      startVoiceConfirmation: (_voiceFilledTimer != null && _editingTimer == null),
+      startVoiceConfirmation:
+      (_voiceFilledTimer != null && _editingTimer == null),
     ),
-
-    // --- 2. PASS THE KEY TO ROUTINES PAGE ---
     RoutinesPage(
-        key: _routinesKey,
-        routines: _routines
+      key: _routinesKey,
+      routines: _routines,
     ),
-
-    const Placeholder(), // Activity page
+    const Placeholder(),
     const StopwatchModeSelector(),
   ];
+
+  void _handleSaveTimer(TimerData timer) {
+    _addOrUpdateTimer(timer);
+    _startTimer(timer);
+
+    if (!mounted) return;
+    setState(() {
+      _editingTimer = null;
+      _voiceFilledTimer = null;
+      _showingCountdown = true;
+    });
+  }
 
   Widget _buildBody() {
     return Stack(
@@ -470,7 +465,6 @@ class _MainPageState extends State<MainPage> {
             child: CountdownScreen(
               timerData: _activeTimer!,
               onBack: _exitCountdown,
-              controller: _countdownController,
             ),
           ),
       ],
@@ -485,49 +479,48 @@ class _MainPageState extends State<MainPage> {
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          //if (_activeTimer != null) _buildActiveTimerBanner(),
           BottomNavigationBar(
             selectedItemColor: _showingCountdown
-                ? Colors.grey             // No highlight when countdown is showing
-                : const Color(0xFF007BFF),// Normal highlight when not in countdown
-
+                ? Colors.grey
+                : const Color(0xFF007BFF),
             unselectedItemColor: Colors.grey,
             type: BottomNavigationBarType.fixed,
-            currentIndex: _tabIndex,      // ← keep this unchanged
+            currentIndex: _tabIndex,
             onTap: (index) {
               setState(() {
                 if (_showingCountdown) {
-                  _showingCountdown = false; // Close countdown when switching tabs
+                  _showingCountdown = false;
                 }
                 _tabIndex = index;
               });
             },
             items: const [
-              BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-              BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Create'),
-              BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Routines'),
-              BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
-              BottomNavigationBarItem(icon: Icon(Icons.timer), label: 'Stopwatch'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.home), label: 'Home'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.add_circle_outline), label: 'Create'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.list_alt), label: 'Routines'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.bar_chart_outlined), label: 'Activity'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.timer), label: 'Stopwatch'),
             ],
           ),
           GestureDetector(
             onTap: () async {
               if (_isListening) {
-                // User tapped to stop listening
                 await _listen.stopListening();
 
                 if (tutorialActive) {
                   setState(() => tutorialPaused = false);
-                  _runTutorial(); // resume
+                  _runTutorial();
                 }
-
               } else {
-                // User tapped to start listening
                 if (tutorialActive) {
                   setState(() => tutorialPaused = true);
                   await _tts.stop();
                 }
-
                 await _listen.startListening();
               }
             },
@@ -539,7 +532,10 @@ class _MainPageState extends State<MainPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(_isListening ? Icons.mic : Icons.mic_off, color: Colors.white),
+                  Icon(
+                    _isListening ? Icons.mic : Icons.mic_off,
+                    color: Colors.white,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     _isListening ? "Listening... Tap to stop" : "Tap to Speak",

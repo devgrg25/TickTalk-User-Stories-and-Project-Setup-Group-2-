@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tts_service.dart';
-import 'MainPage.dart';
+import 'main_page.dart';
 import 'welcome_page.dart';
 
 Future<void> main() async {

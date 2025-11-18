@@ -7,7 +7,7 @@ import 'homepage.dart';
 import 'create_timer_screen.dart';
 import 'stopwatch/stopwatchmodeselecter.dart';
 import 'stopwatch/stopwatch_normal_mode.dart';
-import 'MainPage.dart';
+import 'main_page.dart';
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});

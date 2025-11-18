@@ -1,14 +1,12 @@
+// controllers/voice_logic.dart
 import 'package:flutter/material.dart';
 import 'voice_controller.dart';
 import '../timer_models/timer_model.dart';
 import '../timer_models/routine_timer_model.dart';
 import '../routines/routines_page.dart';
-import '../countdown_screen.dart';
 
 class ListenController {
-  // ==== dependencies from MainPage ====
   final VoiceController voice;
-  final CountdownController countdown;
   final GlobalKey<RoutinesPageState> routinesKey;
 
   // state accessors
@@ -23,30 +21,25 @@ class ListenController {
   final void Function() endTutorial;
 
   final TimerData? Function() getActiveTimer;
-
   final int Function() getTabIndex;
 
   final void Function() pauseTimer;
   final void Function() resumeTimer;
   final void Function() stopTimer;
 
-  // create-timer routing (Case 3)
   final void Function(TimerData?) setEditingTimer;
   final void Function(TimerData?) setVoiceFilledTimer;
   final void Function(int) setTabIndex;
   final List<TimerData> Function() getTimers;
   final String Function(List<TimerData>) generateUniqueName;
 
-  // speaking
   final Future<void> Function() stopPageTts;
 
-  // mounted + setState
   final bool Function() mounted;
   final void Function(void Function()) setState;
 
   ListenController({
     required this.voice,
-    required this.countdown,
     required this.routinesKey,
     required this.getIsListening,
     required this.setIsListening,
@@ -74,7 +67,6 @@ class ListenController {
   Future<void> startListening() async {
     // stop any speaking first
     await stopPageTts();
-    countdown.stopSpeaking();
 
     if (getIsListening()) return;
     setState(() => setIsListening(true));
@@ -97,7 +89,6 @@ class ListenController {
             return;
           }
 
-          // resume tutorial
           setTutorialPaused(false);
           runTutorial();
         },
@@ -116,15 +107,15 @@ class ListenController {
           final words = cmd.toLowerCase();
 
           if (words.contains("pause") || words.contains("hold")) {
-            countdown.pause();
             pauseTimer();
           } else if (words.contains("resume") || words.contains("continue")) {
-            countdown.resume();
             resumeTimer();
           } else if (words.contains("stop") || words.contains("end")) {
             stopTimer();
           } else if (words.contains("timer")) {
-            voice.speak("Please stop the current timer before running new timer");
+            voice.speak(
+              "Please stop the current timer before running a new timer.",
+            );
           } else {
             voice.speak("Command not recognized while timer is running.");
           }
@@ -146,7 +137,7 @@ class ListenController {
       return;
     }
 
-    // ---------- CASE 3: Create Timer ----------
+    // ---------- CASE 3: Create Timer / global create ----------
     debugPrint('Case 3 - Create Timer');
 
     await voice.startListeningForTimer(
@@ -183,7 +174,8 @@ class ListenController {
       onUnrecognized: (spoken) async {
         if (spoken == "incomplete") {
           await voice.speak(
-              "Please tell me the timer length. For example, say 'start a 5 minute timer'.");
+            "Please tell me the timer length. For example, say 'start a 5 minute timer'.",
+          );
         } else {
           await voice.speak("Sorry, I didn't understand that.");
         }
