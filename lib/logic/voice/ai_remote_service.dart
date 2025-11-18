@@ -2,13 +2,21 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AiRemoteService {
-  /// For emulator/desktop only.
-  /// If testing on Android device later, we will replace with your LAN IP.
-  static const String _baseUrl = "http://192.168.0.121";
+  // Toggle between Cloudflare tunnel or local LAN
+  static bool useCloudflare = true;
+
+  // 👉 Update this URL whenever Cloudflare gives you a new one
+  static String cloudflareUrl = "https://ver-slightly-cameron-towers.trycloudflare.com";
+
+  // 👉 Local testing at home (LAN)
+  static const String localUrl = "http://192.168.0.121:8000";
+
+  static String get baseUrl => useCloudflare ? cloudflareUrl : localUrl;
 
   static Future<Map<String, dynamic>?> interpret(String text) async {
     try {
-      final uri = Uri.parse("$_baseUrl/interpret");
+      final uri = Uri.parse("$baseUrl/interpret");
+
       final response = await http.post(
         uri,
         headers: {"Content-Type": "application/json"},
