@@ -3,8 +3,17 @@ import 'package:http/http.dart' as http;
 import 'ai_command.dart';
 
 class AiInterpreter {
-  static String baseUrl = "http://192.168.0.121:8000";
+  // 👉 Choose which backend to use
+  static bool useCloudflare = true;
 
+  // 👉 Change ONLY this URL each time Cloudflare Tunnel gives you a new one
+  static String cloudflareUrl = "https://ver-slightly-cameron-towers.trycloudflare.com";
+
+  // 👉 Home local network (not used on eduroam)
+  static String localUrl = "http://192.168.0.121:8000";
+
+  // Auto-select based on demo setting
+  static String get baseUrl => useCloudflare ? cloudflareUrl : localUrl;
 
   static Future<AiCommand?> interpret(String rawText) async {
     final url = Uri.parse("$baseUrl/interpret");
@@ -37,7 +46,6 @@ class AiInterpreter {
       return null;
     }
   }
-
 
   static String _normalize(String text) {
     final fillers = ["uh", "umm", "like", "you know"];
