@@ -4,19 +4,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 import 'dart:convert';
-
-import 'stopwatch/stopwatch_normal_mode.dart';
 import 'homepage.dart';
 import 'create_timer_screen.dart';
 import 'timer_models/timer_model.dart';
 import 'countdown_screen.dart';
 import 'countdown_screenV.dart';
 import 'stopwatch/stopwatchmodeselecter.dart';
-import 'controllers/voice_controller.dart';
+import 'controllers/mic_controller.dart';
 import 'timer_models/routine_timer_model.dart';
 import 'routines/routines.dart';
 import 'routines/routines_page.dart';
 import 'controllers/voice_logic.dart';
+import 'controllers/tutorial_controller.dart';
 
 class MainPage extends StatefulWidget {
   final bool tutorialMode;
@@ -31,11 +30,6 @@ class _MainPageState extends State<MainPage> {
   bool _showingCountdown = false;
   bool _isListening = false;
 
-  // Tutorial
-  bool tutorialActive = false;
-  bool tutorialPaused = false;
-  int tutorialStep = 0;
-
   // Timers
   TimerData? _editingTimer;
   TimerData? _activeTimer;
@@ -49,6 +43,7 @@ class _MainPageState extends State<MainPage> {
   TimerData? _voiceFilledTimer;
 
   late ListenController _listen;
+  late TutorialController tutorial;
 
   static const String _timersKey = 'saved_timers_list';
 
@@ -59,23 +54,22 @@ class _MainPageState extends State<MainPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.tutorialMode) {
-        _startTutorial();
-      }
-    });
 
     _initTts();
+
+    tutorial = TutorialController(
+      context: context,
+      goToTab: (index) => setState(() => _tabIndex = index),
+      pushPage: (page) => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => page),
+      ),
+    );
 
     _listen = ListenController(
       voice: _voiceController,
       getIsListening: () => _isListening,
       setIsListening: (v) => _isListening = v,
-      getTutorialActive: () => tutorialActive,
-      getTutorialPaused: () => tutorialPaused,
-      setTutorialPaused: (v) => tutorialPaused = v,
-      runTutorial: _runTutorial,
-      endTutorial: _endTutorial,
       getActiveTimer: () => _activeTimer,
       getTabIndex: () => _tabIndex,
       pauseTimer: _pauseTimer,
@@ -90,6 +84,7 @@ class _MainPageState extends State<MainPage> {
       routinesKey: _routinesKey,
       mounted: () => mounted,
       setState: setState,
+      tutorialController: tutorial,
     );
 
     _routines = PredefinedRoutines(
@@ -99,6 +94,12 @@ class _MainPageState extends State<MainPage> {
     );
 
     _loadTimers();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.tutorialMode) {
+        tutorial.start();
+      }
+    });
   }
 
   Future<void> _initTts() async {
@@ -326,87 +327,6 @@ class _MainPageState extends State<MainPage> {
     _speak("Timer stopped.");
   }
 
-  // ---------- Tutorial (unchanged from your logic) ----------
-  void _endTutorial() async {
-    setState(() {
-      tutorialActive = false;
-      tutorialPaused = false;
-    });
-
-    await _tts.stop();
-    await _speakWait("Tutorial skipped. You can now explore the app freely.");
-  }
-
-  void _startTutorial() {
-    setState(() {
-      tutorialActive = true;
-      tutorialPaused = false;
-      tutorialStep = 0;
-    });
-    _runTutorial();
-  }
-
-  Future<void> _runTutorial() async {
-    if (!mounted || tutorialPaused) return;
-
-    switch (tutorialStep) {
-      case 0:
-        setState(() => _tabIndex = 1);
-        await _speakWait(
-          'This is the timer creation page. Here is a step by step guide on how to use it. '
-              'One: enter a timer name. Two: set work minutes. Three: set break minutes. Four: set the number of sets. '
-              'You can also say: Start a study timer for four sets with twenty five minutes work and five minutes break.',
-        );
-        tutorialStep++;
-        break;
-
-      case 1:
-        setState(() => _tabIndex = 4);
-        await _speakWait(
-          'This is the stopwatch selector. Choose Normal Mode for a single stopwatch with voice control, '
-              'or Player Mode to track up to six players.',
-        );
-        tutorialStep++;
-        break;
-
-      case 2:
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const StopwatchNormalMode(autoStart: false),
-          ),
-        );
-        await Future.delayed(const Duration(milliseconds: 200));
-        await _speakWait(
-          'This is Normal Mode. Say start to begin, stop to pause, lap to mark a lap, and reset to clear it.',
-        );
-        tutorialStep++;
-        break;
-
-      default:
-        tutorialActive = false;
-        await _speakWait(
-          "Tutorial complete. You can now explore the app freely.",
-        );
-        break;
-    }
-
-    if (tutorialActive && !tutorialPaused) {
-      _runTutorial();
-    }
-  }
-
-  Future<void> _speakWait(String text) async {
-    await _tts.stop();
-    await _tts.setSpeechRate(0.45);
-    await _tts.awaitSpeakCompletion(true);
-    await _tts.speak(text);
-
-    while (tutorialPaused) {
-      await Future.delayed(const Duration(milliseconds: 200));
-    }
-  }
-
   // ---------- PAGES ----------
   List<Widget> get _pages => [
     HomeScreen(
@@ -512,15 +432,9 @@ class _MainPageState extends State<MainPage> {
               if (_isListening) {
                 await _listen.stopListening();
 
-                if (tutorialActive) {
-                  setState(() => tutorialPaused = false);
-                  _runTutorial();
-                }
-              } else {
-                if (tutorialActive) {
-                  setState(() => tutorialPaused = true);
-                  await _tts.stop();
-                }
+                if (tutorial.isActive) tutorial.resume();
+                  } else {
+                if (tutorial.isActive) tutorial.pause();
                 await _listen.startListening();
               }
             },

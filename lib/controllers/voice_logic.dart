@@ -1,9 +1,9 @@
 // controllers/voice_logic.dart
 import 'package:flutter/material.dart';
-import 'voice_controller.dart';
+import 'mic_controller.dart';
 import '../timer_models/timer_model.dart';
-import '../timer_models/routine_timer_model.dart';
 import '../routines/routines_page.dart';
+import 'tutorial_controller.dart';
 
 class ListenController {
   final VoiceController voice;
@@ -13,12 +13,7 @@ class ListenController {
   final bool Function() getIsListening;
   final void Function(bool) setIsListening;
 
-  final bool Function() getTutorialActive;
-  final bool Function() getTutorialPaused;
-  final void Function(bool) setTutorialPaused;
-
-  final void Function() runTutorial;
-  final void Function() endTutorial;
+  final TutorialController tutorialController;
 
   final TimerData? Function() getActiveTimer;
   final int Function() getTabIndex;
@@ -43,11 +38,7 @@ class ListenController {
     required this.routinesKey,
     required this.getIsListening,
     required this.setIsListening,
-    required this.getTutorialActive,
-    required this.getTutorialPaused,
-    required this.setTutorialPaused,
-    required this.runTutorial,
-    required this.endTutorial,
+    required this.tutorialController,
     required this.getActiveTimer,
     required this.getTabIndex,
     required this.pauseTimer,
@@ -72,7 +63,7 @@ class ListenController {
     setState(() => setIsListening(true));
 
     // ---------- CASE 0: tutorial ----------
-    if (getTutorialActive()) {
+    if (tutorialController.isActive) {
       debugPrint('Case 0 - Tutorial');
 
       await voice.startListeningRaw(
@@ -85,12 +76,10 @@ class ListenController {
               words.contains("end tutorial") ||
               words.contains("cancel tutorial") ||
               words.contains("done")) {
-            endTutorial();
+            tutorialController.stop();
             return;
           }
 
-          setTutorialPaused(false);
-          runTutorial();
         },
       );
       return;

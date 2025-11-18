@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'timer_models/timer_model.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'controllers/voice_controller.dart';
+import 'controllers/mic_controller.dart';
 
 class CreateTimerScreen extends StatefulWidget {
   final TimerData? existingTimer;
