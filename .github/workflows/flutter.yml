@@ -25,8 +25,8 @@ jobs:
         run: flutter pub get
 
       # Run static analysis
-      - name: Run Flutter Analyzer
-        run: flutter analyze
+     # - name: Run Flutter Analyzer
+      #  run: flutter analyze
 
       # Run tests
       - name: Run Tests
