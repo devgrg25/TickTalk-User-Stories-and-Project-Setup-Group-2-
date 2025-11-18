@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'timer_controller.dart';
-import 'timer_interval.dart';
+
 import 'package:ticktalk_app/logic/voice/voice_service.dart';
 import 'package:ticktalk_app/logic/voice/voice_tts_service.dart';
 

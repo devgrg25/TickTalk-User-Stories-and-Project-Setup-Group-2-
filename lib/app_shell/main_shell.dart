@@ -22,8 +22,7 @@ class _MainShellState extends State<MainShell> {
   String _lastWords = "";
 
   Key createTimerKey = UniqueKey();
-  final GlobalKey<RoutinesPageState> routinesKey =
-  GlobalKey<RoutinesPageState>();
+  final GlobalKey<RoutinesPageState> routinesKey = GlobalKey<RoutinesPageState>();
 
   final stt.SpeechToText _speech = stt.SpeechToText();
   late final VoiceRouter _voiceRouter;
@@ -32,27 +31,16 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
 
-    // Initialize the voice router
     _voiceRouter = VoiceRouter(
       onNavigateTab: (int tabIndex) {
         setState(() => _index = tabIndex);
 
-        // If we navigate to routines, refresh them
         if (tabIndex == 2) {
           routinesKey.currentState?.reload();
         }
       },
-
-      // 🔮 AI fallback for Hybrid C2:
-      // Right now this is just a placeholder.
-      // Later you can call your backend / OpenAI here.
-      aiFallback: (String rawText) async {
-        debugPrint("AI fallback would handle: $rawText");
-        await VoiceTtsService.instance.speak(
-          "I'm still learning to understand more complex phrases.",
-        );
-      },
     );
+
   }
 
   void _returnHome() {
@@ -64,17 +52,13 @@ class _MainShellState extends State<MainShell> {
     if (!_isListening) {
       bool available = await _speech.initialize(
         onStatus: (status) {
-          if (kDebugMode) {
-            print("🎙 Status: $status");
-          }
+          if (kDebugMode) print("🎙 Status: $status");
           if (status.contains('notListening') || status.contains('done')) {
             setState(() => _isListening = false);
           }
         },
         onError: (e) {
-          if (kDebugMode) {
-            print("❌ Speech error: $e");
-          }
+          if (kDebugMode) print("❌ Speech error: $e");
           setState(() => _isListening = false);
         },
       );
@@ -89,8 +73,7 @@ class _MainShellState extends State<MainShell> {
           onResult: (result) {
             setState(() => _lastWords = result.recognizedWords);
 
-            // When STT thinks the phrase is finished, send it to the router.
-            if (result.finalResult) {
+            if (result.finalResult && _lastWords.isNotEmpty) {
               _voiceRouter.handle(_lastWords);
             }
           },
@@ -128,7 +111,6 @@ class _MainShellState extends State<MainShell> {
           children: [
             IndexedStack(index: _index, children: screens),
 
-            // Bubble showing live transcription
             if (_isListening && _lastWords.isNotEmpty)
               Positioned(
                 left: 0,
@@ -136,18 +118,14 @@ class _MainShellState extends State<MainShell> {
                 bottom: 160,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.55),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       _lastWords,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
                     ),
                   ),
                 ),
@@ -166,10 +144,7 @@ class _MainShellState extends State<MainShell> {
             labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             onDestinationSelected: (i) {
               setState(() => _index = i);
-
-              if (i == 2) {
-                routinesKey.currentState?.reload();
-              }
+              if (i == 2) routinesKey.currentState?.reload();
             },
             destinations: const [
               NavigationDestination(

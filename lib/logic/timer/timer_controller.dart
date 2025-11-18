@@ -6,7 +6,11 @@ import 'package:ticktalk_app/logic/haptics/haptics_service.dart';
 class TimerInterval {
   final String name;
   final int seconds;
-  TimerInterval({required this.name, required this.seconds});
+
+  const TimerInterval({
+    required this.name,
+    required this.seconds,
+  });
 }
 
 class TimerController {
