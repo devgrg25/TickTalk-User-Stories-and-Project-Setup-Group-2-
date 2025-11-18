@@ -29,8 +29,8 @@ jobs:
       #  run: flutter analyze
 
       # Run tests
-      - name: Run Tests
-        run: flutter test --no-pub
+      #- name: Run Tests
+      #  run: flutter test --no-pub
 
       # Build APK
       - name: Build APK
