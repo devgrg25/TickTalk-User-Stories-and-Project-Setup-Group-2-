@@ -14,7 +14,7 @@ import 'controllers/mic_controller.dart';
 import 'timer_models/routine_timer_model.dart';
 import 'routines/routines.dart';
 import 'routines/routines_page.dart';
-import 'controllers/voice_logic.dart';
+import 'controllers/listen_controller.dart';
 import 'controllers/tutorial_controller.dart';
 
 class MainPage extends StatefulWidget {

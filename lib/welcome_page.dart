@@ -3,10 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'homepage.dart';
-import 'create_timer_screen.dart';
-import 'stopwatch/stopwatchmodeselecter.dart';
-import 'stopwatch/stopwatch_normal_mode.dart';
 import 'main_page.dart';
 
 class WelcomePage extends StatefulWidget {
@@ -86,9 +82,9 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
     setState(() => _listening = true);
 
     await _speech.listen(
-      listenMode: stt.ListenMode.confirmation,
       partialResults: true,
       localeId: 'en_US',
+      listenMode: stt.ListenMode.confirmation,
       onResult: (res) {
         if (!mounted) return;
         final words = res.recognizedWords.trim();
@@ -145,65 +141,6 @@ Tap the blue bar at the bottom of your screen to speak, then tap again to stop.
         MaterialPageRoute(builder: (_) => const MainPage(tutorialMode: true)),
       );
       return;
-      /*
-      // 1) Go to Create Timer page immediately
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const CreateTimerScreen()),
-      );
-
-      // Speak *on* Create Timer page
-      const createGuide =
-          'This is the timer creation page '
-          'Here is a step by step guide on how to use it'
-          'One: enter a timer name, for example “study”. '
-          'Two: set work minutes, for example twenty five. '
-          'Three: set break minutes, for example five. '
-          'Four: set number of sets, for example four. '
-          'You can also say a single sentence like: '
-          'Start a study timer for four sets with twenty five minute work and five minute break.';
-      await Future.delayed(const Duration(milliseconds: 350));
-      try { await _tts.speak(createGuide); } catch (_) {}
-
-      // 2) Open Stopwatch Mode Selector
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const StopwatchModeSelector()),
-      );
-
-      // Speak *on* Stopwatch selector page
-      const selectorGuide =
-          'This is the stopwatch selector. '
-          'Choose Normal Mode for a single stopwatch with voice control, '
-          'or Player Mode to track up to six players at once.';
-      await Future.delayed(const Duration(milliseconds: 350));
-      try { await _tts.speak(selectorGuide); } catch (_) {}
-
-// 3) Open Normal Mode stopwatch
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const StopwatchNormalMode(autoStart: false)),
-      );
-
-// Speak *on* Normal Mode page (slower rate), then restore default
-      const normalGuide =
-          'This is Normal Mode. Say "start" to begin, "stop" to pause, "lap" to mark a lap, and "reset" to clear. '
-          'You can also use the buttons on screen.';
-
-      await Future.delayed(const Duration(milliseconds: 350)); // ensure page is shown
-      try {
-        await _tts.setSpeechRate(0.3);     // slower just for this page
-        await _tts.setPitch(1.0);
-        await _tts.awaitSpeakCompletion(true);
-        await _tts.speak(normalGuide);
-      } catch (_) {
-        // ignore TTS errors
-      } finally {
-        await _tts.setSpeechRate(0.50);     // restore your global rate
-      }
-
-      if (!mounted) return;
-
-      return;*/
     }
 
 
