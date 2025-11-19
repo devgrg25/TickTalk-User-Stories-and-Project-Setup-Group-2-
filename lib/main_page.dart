@@ -27,13 +27,11 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   int _tabIndex = 0;
-  bool _showingCountdown = false;
   bool _isListening = false;
+  TimerData? _selectedTimer;
 
   // Timers
   TimerData? _editingTimer;
-  TimerData? _activeTimer;
-  Timer? _ticker; // single global ticker
 
   final FlutterTts _tts = FlutterTts();
   final VoiceController _voiceController = VoiceController();
@@ -70,7 +68,7 @@ class _MainPageState extends State<MainPage> {
       voice: _voiceController,
       getIsListening: () => _isListening,
       setIsListening: (v) => _isListening = v,
-      getActiveTimer: () => _activeTimer,
+      getActiveTimer: () => _selectedTimer,
       getTabIndex: () => _tabIndex,
       pauseTimer: _pauseTimer,
       resumeTimer: _resumeTimer,
@@ -125,7 +123,6 @@ class _MainPageState extends State<MainPage> {
   void dispose() {
     _tts.stop();
     _voiceController.dispose();
-    _ticker?.cancel();
     super.dispose();
   }
 
@@ -133,14 +130,6 @@ class _MainPageState extends State<MainPage> {
   void _switchTab(int index) {
     if (!mounted) return;
     setState(() => _tabIndex = index);
-  }
-
-  void _exitCountdown() {
-    if (!mounted) return;
-    setState(() {
-      _showingCountdown = false;
-      _tabIndex = 0; // back to Home
-    });
   }
 
   // ---------- PERSISTENCE ----------
@@ -211,138 +200,66 @@ class _MainPageState extends State<MainPage> {
     );
   }
 
-  void _playTimer(TimerData timerToPlay) {
-    _startTimer(timerToPlay);
-  }
+  // ---------------- MULTI-TIMER ENGINE ----------------
 
-  void _startTimer(TimerData timerData) {
-    // Ignore zero/negative durations
-    if (timerData.totalTime <= 0) {
-      _speak("Timer duration is zero.");
-      return;
-    }
+  void _startTimer(TimerData timer) {
+    if (timer.isRunning) return;
 
-    // If this exact timer is already active, and ticking, do nothing
-    if (_activeTimer?.id == timerData.id && (_ticker?.isActive ?? false)) {
-      return;
-    }
+    timer.start(
+          () => setState(() {}),
+          () {
+        _speak("Time's up for ${timer.name}");
+        setState(() {});
+      },
+    );
 
-    // Cancel any existing ticker
-    _ticker?.cancel();
-
-    if (!mounted) return;
+    // open countdown screen for THIS timer only
     setState(() {
-      _activeTimer = timerData.copyWith();
-      _showingCountdown = true; // show fullscreen
-    });
-
-    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      if (_activeTimer == null) {
-        timer.cancel();
-        return;
-      }
-
-      final current = _activeTimer!;
-      final remaining = current.totalTime;
-
-      if (remaining <= 0) {
-        timer.cancel();
-        if (!mounted) return;
-
-        _speak("Time's up.");
-
-        Future.delayed(const Duration(milliseconds: 400), () {
-          if (!mounted) return;
-          setState(() {
-            _activeTimer = null;
-            _showingCountdown = false;
-            _tabIndex = 0;
-          });
-        });
-        return;
-      }
-
-      setState(() {
-        _activeTimer = current.copyWith(totalTime: remaining - 1);
-      });
+      _selectedTimer = timer;
     });
   }
 
-  void _pauseTimer() {
-    if (_ticker == null) return;
-    _ticker!.cancel();
-    _ticker = null;
-    _speak("Timer paused.");
-    setState(() {}); // to refresh isPaused in HomeScreen
+  void _pauseTimer(TimerData timer) {
+    timer.pause();
+    _speak("${timer.name} paused");
+    setState(() {});
   }
 
-  void _resumeTimer() {
-    if (_activeTimer == null || _ticker != null) return;
-
-    _speak("Resuming timer.");
-
-    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return;
-      if (_activeTimer == null) {
-        timer.cancel();
-        return;
-      }
-
-      final current = _activeTimer!;
-      final remaining = current.totalTime;
-
-      if (remaining <= 0) {
-        timer.cancel();
-        _speak("Time's up.");
-        setState(() {
-          _activeTimer = null;
-          _showingCountdown = false;
-          _tabIndex = 0;
-        });
-        return;
-      }
-
-      setState(() {
-        _activeTimer = current.copyWith(totalTime: remaining - 1);
-      });
-    });
-
-    setState(() {}); // refresh isPaused
+  void _resumeTimer(TimerData timer) {
+    timer.resume(
+          () => setState(() {}),
+          () => _speak("Time's up for ${timer.name}"),
+    );
+    setState(() {});
   }
 
-  void _stopTimer() {
-    _ticker?.cancel();
-    _ticker = null;
+  void _stopTimer(TimerData timer) {
+    timer.stop();
+    _speak("${timer.name} stopped");
+    setState(() {});
 
-    if (!mounted) return;
-    setState(() {
-      _activeTimer = null;
-      _showingCountdown = false;
-    });
-
-    _speak("Timer stopped.");
+    if (_selectedTimer == timer) {
+      _selectedTimer = null; // close fullscreen view
+    }
   }
 
   // ---------- PAGES ----------
   List<Widget> get _pages => [
     HomeScreen(
       timers: _timers,
-      onPlayTimer: _playTimer,
+      onPlayTimer: _startTimer,
       onEditTimer: _editTimer,
       onDeleteTimer: _deleteTimer,
       onSwitchTab: _switchTab,
       onStartTimer: _startTimer,
-      activeTimer: _activeTimer,
-      onShowCountdown: () {
-        setState(() => _showingCountdown = true);
+      onPauseTimer: _pauseTimer,
+      onResumeTimer: _resumeTimer,
+      onStopTimer: _stopTimer,
+      onOpenCountdown: (timer) {
+        setState(() {
+          _selectedTimer = _timers.firstWhere((t) => t.id == timer.id);
+        });
       },
-      isPaused: _activeTimer != null && _ticker == null,
-      onPause: _pauseTimer,
-      onResume: _resumeTimer,
     ),
     CreateTimerScreen(
       key: ValueKey(_voiceFilledTimer?.id ?? 'create_static'),
@@ -367,7 +284,6 @@ class _MainPageState extends State<MainPage> {
     setState(() {
       _editingTimer = null;
       _voiceFilledTimer = null;
-      _showingCountdown = true;
     });
   }
 
@@ -379,14 +295,13 @@ class _MainPageState extends State<MainPage> {
           children: _pages,
         ),
 
-        if (_activeTimer != null)
-          Offstage(
-            offstage: !_showingCountdown,
-            child: CountdownScreen(
-              timerData: _activeTimer!,
-              onBack: _exitCountdown,
+        if (_selectedTimer != null)
+          CountdownScreen(
+              timerData: _selectedTimer!,
+                onBack: () {
+                  setState(() => _selectedTimer = null);
+                },
             ),
-          ),
       ],
     );
   }
@@ -400,7 +315,7 @@ class _MainPageState extends State<MainPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           BottomNavigationBar(
-            selectedItemColor: _showingCountdown
+            selectedItemColor: _selectedTimer != null
                 ? Colors.grey
                 : const Color(0xFF007BFF),
             unselectedItemColor: Colors.grey,
@@ -408,9 +323,6 @@ class _MainPageState extends State<MainPage> {
             currentIndex: _tabIndex,
             onTap: (index) {
               setState(() {
-                if (_showingCountdown) {
-                  _showingCountdown = false;
-                }
                 _tabIndex = index;
               });
             },

@@ -18,9 +18,9 @@ class ListenController {
   final TimerData? Function() getActiveTimer;
   final int Function() getTabIndex;
 
-  final void Function() pauseTimer;
-  final void Function() resumeTimer;
-  final void Function() stopTimer;
+  final void Function(TimerData timer) pauseTimer;
+  final void Function(TimerData timer) resumeTimer;
+  final void Function(TimerData timer) stopTimer;
 
   final void Function(TimerData?) setEditingTimer;
   final void Function(TimerData?) setVoiceFilledTimer;
@@ -94,13 +94,15 @@ class ListenController {
         onCommand: (cmd) async {
           setState(() => setIsListening(false));
           final words = cmd.toLowerCase();
+          final timer = getActiveTimer();
+          if (timer == null) return;
 
           if (words.contains("pause") || words.contains("hold")) {
-            pauseTimer();
+            pauseTimer(timer);
           } else if (words.contains("resume") || words.contains("continue")) {
-            resumeTimer();
+            resumeTimer(timer);
           } else if (words.contains("stop") || words.contains("end")) {
-            stopTimer();
+            stopTimer(timer);
           } else if (words.contains("timer")) {
             voice.speak(
               "Please stop the current timer before running a new timer.",

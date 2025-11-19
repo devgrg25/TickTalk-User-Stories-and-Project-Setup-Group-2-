@@ -11,11 +11,10 @@ class HomeScreen extends StatefulWidget {
   final Function(String) onDeleteTimer;
   final void Function(int) onSwitchTab;
   final Function(TimerData) onStartTimer;
-  final TimerData? activeTimer;
-  final VoidCallback onShowCountdown;
-  final bool isPaused;
-  final VoidCallback onPause;
-  final VoidCallback onResume;
+  final Function(TimerData) onPauseTimer;
+  final Function(TimerData) onResumeTimer;
+  final Function(TimerData) onStopTimer;
+  final Function(TimerData) onOpenCountdown;
 
   const HomeScreen({
     super.key,
@@ -25,11 +24,10 @@ class HomeScreen extends StatefulWidget {
     required this.onDeleteTimer,
     required this.onSwitchTab,
     required this.onStartTimer,
-    this.activeTimer,
-    required this.onShowCountdown,
-    required this.isPaused,
-    required this.onPause,
-    required this.onResume
+    required this.onPauseTimer,
+    required this.onResumeTimer,
+    required this.onStopTimer,
+    required this.onOpenCountdown,
   });
 
   @override
@@ -157,31 +155,25 @@ class HomeScreenState extends State<HomeScreen> {
                   itemCount: widget.timers.length,
                   itemBuilder: (context, index) {
                     final timer = widget.timers[index];
-                    final bool isActive = widget.activeTimer?.id == timer.id;
 
                     return TimerCard(
                       timer: timer,
-                      isActive: isActive,
-                      isPaused: widget.isPaused,
-                      activeTime: isActive ? widget.activeTimer!.totalTime : null,
+                      isActive: timer.isRunning,
+                      isPaused: !timer.isRunning && timer.totalTime > 0 && timer.totalTime < timer.workInterval * 60,
+
+                      activeTime: timer.totalTime,
+
                       title: timer.name,
-                      status: isActive
-                          ? (widget.isPaused ? "Paused" : "Active")
-                          : "Ready",
-                      feedback: 'Audio + Haptic',
-                      color: isActive ? Colors.green : const Color(0xFF007BFF),
-                      onPause: widget.onPause,
-                      onResume: () {
-                        if (!isActive) {
-                          widget.onStartTimer(timer);
-                        } else {
-                          widget.onResume();
-                        }
-                        widget.onShowCountdown();
-                      },
+                      status: timer.isRunning ? "Running" : "Ready",
+                      feedback: "Audio + Haptic",
+                      color: timer.isRunning ? Colors.green : const Color(0xFF007BFF),
+
+                      onPause: () => widget.onPauseTimer(timer),
+                      onResume: () => widget.onResumeTimer(timer),
+                      onTap: () => widget.onOpenCountdown(timer),
+
                       onEdit: () => widget.onEditTimer(timer),
                       onDelete: () => widget.onDeleteTimer(timer.id),
-                      onTap: isActive ? widget.onShowCountdown : null,
                     );
 
                   },
@@ -212,9 +204,9 @@ class TimerCard extends StatelessWidget {
   //final VoidCallback onPlay;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-  final bool isActive;
-  final int? activeTime; // remaining time if active
+  final int? activeTime;
   final VoidCallback? onTap;
+  final bool isActive;
   final bool isPaused;
   final VoidCallback onPause;
   final VoidCallback onResume;
@@ -282,19 +274,15 @@ class TimerCard extends StatelessWidget {
               style: const TextStyle(fontSize: 14, color: Colors.black54)),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            if (isActive)
-              IconButton(
-                onPressed: isPaused ? onResume : onPause,
-                icon: Icon(
-                  isPaused ? Icons.play_arrow : Icons.pause,
-                  color: Colors.black54,
-                ),
-              )
-            else
-              IconButton(
-                onPressed: onResume,   // treat play as "resume/start"
-                icon: const Icon(Icons.play_arrow, color: Colors.black54),
+            IconButton(
+              onPressed: isActive
+                  ? onPause   // running → pause
+                  : onResume, // ready/paused → start/resume
+              icon: Icon(
+                isActive ? Icons.pause : Icons.play_arrow,
+                color: Colors.black54,
               ),
+            ),
             IconButton(
                 onPressed: onEdit,
                 icon: const Icon(Icons.edit_outlined, color: Colors.black54)),

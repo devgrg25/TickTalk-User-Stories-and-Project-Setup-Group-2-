@@ -1,13 +1,17 @@
-// timer_model.dart
+import 'dart:async';
 
 class TimerData {
-  final String id; // Unique ID for each timer
+  final String id;
   final String name;
-  final int totalTime;
+
+  int totalTime;       // <- mutable!
   final int workInterval;
   final int breakInterval;
   final int totalSets;
-  final int currentSet;
+  int currentSet;      // <- mutable!
+
+  bool isRunning;
+  Timer? ticker;
 
   TimerData({
     required this.id,
@@ -17,6 +21,8 @@ class TimerData {
     required this.breakInterval,
     required this.totalSets,
     required this.currentSet,
+    this.isRunning = false,
+    this.ticker,
   });
 
   TimerData copyWith({
@@ -27,6 +33,7 @@ class TimerData {
     int? breakInterval,
     int? totalSets,
     int? currentSet,
+    bool? isRunning,
   }) {
     return TimerData(
       id: id ?? this.id,
@@ -36,10 +43,10 @@ class TimerData {
       breakInterval: breakInterval ?? this.breakInterval,
       totalSets: totalSets ?? this.totalSets,
       currentSet: currentSet ?? this.currentSet,
+      isRunning: isRunning ?? this.isRunning,
     );
   }
 
-  // Method to convert a TimerData instance to a JSON map
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
@@ -50,7 +57,6 @@ class TimerData {
     'currentSet': currentSet,
   };
 
-  // Factory constructor to create a TimerData instance from a JSON map
   factory TimerData.fromJson(Map<String, dynamic> json) => TimerData(
     id: json['id'],
     name: json['name'],
@@ -58,6 +64,47 @@ class TimerData {
     workInterval: json['workInterval'],
     breakInterval: json['breakInterval'],
     totalSets: json['totalSets'],
-    currentSet: json['currentSet']
+    currentSet: json['currentSet'],
   );
+
+  void start(Function onTick, Function onFinish) {
+    isRunning = true;
+    ticker = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (totalTime <= 0) {
+        t.cancel();
+        isRunning = false;
+        onFinish();
+        return;
+      }
+      totalTime--;      // now works
+      onTick();
+    });
+  }
+
+  void pause() {
+    ticker?.cancel();
+    isRunning = false;
+  }
+
+  void resume(Function onTick, Function onFinish) {
+    if (isRunning) return;
+
+    isRunning = true;
+    ticker = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (totalTime <= 0) {
+        t.cancel();
+        isRunning = false;
+        onFinish();
+        return;
+      }
+      totalTime--;
+      onTick();
+    });
+  }
+
+  void stop() {
+    ticker?.cancel();
+    ticker = null;
+    isRunning = false;
+  }
 }
