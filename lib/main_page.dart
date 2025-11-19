@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 import 'dart:convert';
+
 import 'homepage.dart';
 import 'create_timer_screen.dart';
 import 'timer_models/timer_model.dart';
@@ -32,14 +33,13 @@ class _MainPageState extends State<MainPage> {
 
   // Timers
   TimerData? _editingTimer;
-
-  final FlutterTts _tts = FlutterTts();
-  final VoiceController _voiceController = VoiceController();
-  late final PredefinedRoutines _routines;
-
   List<TimerData> _timers = [];
   TimerData? _voiceFilledTimer;
 
+  // Voice / TTS / Routines
+  final FlutterTts _tts = FlutterTts();
+  final VoiceController _voiceController = VoiceController();
+  late final PredefinedRoutines _routines;
   late ListenController _listen;
   late TutorialController tutorial;
 
@@ -105,7 +105,7 @@ class _MainPageState extends State<MainPage> {
       await _tts.setLanguage('en-US');
       await _tts.setSpeechRate(0.9);
     } catch (_) {
-      // swallow device differences
+      // ignore device-specific failures
     }
   }
 
@@ -156,6 +156,9 @@ class _MainPageState extends State<MainPage> {
   void _deleteTimer(String timerId) {
     setState(() {
       _timers.removeWhere((t) => t.id == timerId);
+      if (_selectedTimer != null && _selectedTimer!.id == timerId) {
+        _selectedTimer = null;
+      }
     });
     _saveTimers();
   }
@@ -184,10 +187,22 @@ class _MainPageState extends State<MainPage> {
   // ---------- TTS ----------
   Future<void> _speak(String text) async {
     try {
+      await _tts.stop();
       await _tts.speak(text);
     } catch (e) {
       debugPrint("TTS error: $e");
     }
+  }
+
+  // ---------- HELPERS ----------
+  /// Compute the *full* original duration of a timer in seconds
+  /// using work/break intervals and sets.
+  int _fullDurationSeconds(TimerData t) {
+    final int workSecPerSet = t.workInterval * 60;
+    final int breakSecPerSet = t.breakInterval * 60;
+    // Work for each set + breaks between sets (no break after last)
+    return workSecPerSet * t.totalSets +
+        breakSecPerSet * (t.totalSets - 1);
   }
 
   // ---------- TIMER ENGINE ----------
@@ -202,45 +217,83 @@ class _MainPageState extends State<MainPage> {
 
   // ---------------- MULTI-TIMER ENGINE ----------------
 
-  void _startTimer(TimerData timer) {
+  void _startTimer(TimerData timer, {bool restart = false}) {
+    // If restarting, reset remaining time + set counter
+    if (restart) {
+      timer.totalTime = _fullDurationSeconds(timer);
+      timer.currentSet = 1;
+    }
+
     if (timer.isRunning) return;
 
     timer.start(
-          () => setState(() {}),
+          () => setState(() {}), // onTick
           () {
+        // onFinish: behave like "stop" + speak "Time's up"
+        _stopTimer(timer,
+            announceStopped: false,
+            resetToFull: true); // resets & closes fullscreen
         _speak("Time's up for ${timer.name}");
-        setState(() {});
       },
     );
 
-    // open countdown screen for THIS timer only
     setState(() {
       _selectedTimer = timer;
     });
+    _saveTimers();
   }
 
   void _pauseTimer(TimerData timer) {
     timer.pause();
     _speak("${timer.name} paused");
     setState(() {});
+    _saveTimers();
   }
 
   void _resumeTimer(TimerData timer) {
     timer.resume(
           () => setState(() {}),
-          () => _speak("Time's up for ${timer.name}"),
+          () {
+        // If it finishes after resuming
+        _stopTimer(timer,
+            announceStopped: false,
+            resetToFull: true);
+        _speak("Time's up for ${timer.name}");
+      },
     );
     setState(() {});
+    _saveTimers();
   }
 
-  void _stopTimer(TimerData timer) {
-    timer.stop();
-    _speak("${timer.name} stopped");
-    setState(() {});
+  /// Optional explicit restart function (for future "restart <timer>" voice)
+  void _restartTimer(TimerData timer) {
+    _startTimer(timer, restart: true);
+  }
 
-    if (_selectedTimer == timer) {
-      _selectedTimer = null; // close fullscreen view
+  void _stopTimer(
+      TimerData timer, {
+        bool announceStopped = true,
+        bool resetToFull = true,
+      }) {
+    // Cancel ticker + clear running flag
+    timer.stop();
+
+    if (resetToFull) {
+      timer.totalTime = _fullDurationSeconds(timer);
+      timer.currentSet = 1;
     }
+
+    if (announceStopped) {
+      _speak("${timer.name} stopped");
+    }
+
+    setState(() {
+      if (_selectedTimer == timer) {
+        _selectedTimer = null; // close countdown screen
+      }
+    });
+
+    _saveTimers();
   }
 
   // ---------- PAGES ----------
@@ -257,7 +310,8 @@ class _MainPageState extends State<MainPage> {
       onStopTimer: _stopTimer,
       onOpenCountdown: (timer) {
         setState(() {
-          _selectedTimer = _timers.firstWhere((t) => t.id == timer.id);
+          _selectedTimer =
+              _timers.firstWhere((t) => t.id == timer.id);
         });
       },
     ),
@@ -295,13 +349,14 @@ class _MainPageState extends State<MainPage> {
           children: _pages,
         ),
 
+        // Single fullscreen countdown for the *selected* timer
         if (_selectedTimer != null)
           CountdownScreen(
-              timerData: _selectedTimer!,
-                onBack: () {
-                  setState(() => _selectedTimer = null);
-                },
-            ),
+            timerData: _selectedTimer!,
+            onBack: () {
+              setState(() => _selectedTimer = null);
+            },
+          ),
       ],
     );
   }
@@ -343,16 +398,16 @@ class _MainPageState extends State<MainPage> {
             onTap: () async {
               if (_isListening) {
                 await _listen.stopListening();
-
                 if (tutorial.isActive) tutorial.resume();
-                  } else {
+              } else {
                 if (tutorial.isActive) tutorial.pause();
                 await _listen.startListening();
               }
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              color: _isListening ? Colors.redAccent : const Color(0xFF007BFF),
+              color:
+              _isListening ? Colors.redAccent : const Color(0xFF007BFF),
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 28),
               child: Row(
@@ -364,7 +419,9 @@ class _MainPageState extends State<MainPage> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    _isListening ? "Listening... Tap to stop" : "Tap to Speak",
+                    _isListening
+                        ? "Listening... Tap to stop"
+                        : "Tap to Speak",
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
