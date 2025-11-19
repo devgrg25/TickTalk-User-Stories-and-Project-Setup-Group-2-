@@ -265,11 +265,6 @@ class _MainPageState extends State<MainPage> {
     _saveTimers();
   }
 
-  /// Optional explicit restart function (for future "restart <timer>" voice)
-  void _restartTimer(TimerData timer) {
-    _startTimer(timer, restart: true);
-  }
-
   void _stopTimer(
       TimerData timer, {
         bool announceStopped = true,
@@ -378,7 +373,8 @@ class _MainPageState extends State<MainPage> {
             currentIndex: _tabIndex,
             onTap: (index) {
               setState(() {
-                _tabIndex = index;
+                _selectedTimer = null;  // close fullscreen countdown
+                _tabIndex = index;      // navigate normally
               });
             },
             items: const [

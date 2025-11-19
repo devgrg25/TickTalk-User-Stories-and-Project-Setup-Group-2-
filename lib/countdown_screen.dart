@@ -63,10 +63,6 @@ class CountdownScreen extends StatelessWidget {
           'Active Timer',
           style: TextStyle(color: textColor),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: textColor),
-          onPressed: onBack,
-        ),
       ),
       body: SingleChildScrollView(
         child: Padding(
