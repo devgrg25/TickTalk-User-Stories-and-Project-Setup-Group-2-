@@ -9,8 +9,8 @@ class AiStep {
 
   factory AiStep.fromJson(Map<String, dynamic> json) {
     return AiStep(
-      label: json["label"],
-      seconds: json["seconds"],
+      label: json["label"] ?? "Step",
+      seconds: json["seconds"] ?? 1,
     );
   }
 }
@@ -18,26 +18,28 @@ class AiStep {
 class AiCommand {
   final String type;
 
-  // For simple timers
+  // Simple timer
   final int? seconds;
   final String? label;
 
-  // For interval timers
+  // Interval timer
   final int? workSeconds;
   final int? restSeconds;
   final int? rounds;
 
-  // For routines
+  // Routine
   final String? routineName;
+  final bool? autoSave;
+  final bool? autoStart;
 
-  // For navigation
+  // Navigation
   final String? target;
 
-  // For rename routine
+  // Rename routine
   final String? oldName;
   final String? newName;
 
-  // 🔥 NEW — Multi-step routines
+  // Multi-step routines
   final List<AiStep>? steps;
 
   AiCommand({
@@ -48,6 +50,8 @@ class AiCommand {
     this.restSeconds,
     this.rounds,
     this.routineName,
+    this.autoSave,
+    this.autoStart,
     this.target,
     this.oldName,
     this.newName,
@@ -58,23 +62,33 @@ class AiCommand {
     return AiCommand(
       type: json["type"] ?? "",
 
+      // Simple timer
       seconds: json["seconds"],
       label: json["label"],
 
+      // Interval
       workSeconds: json["workSeconds"],
       restSeconds: json["restSeconds"],
-      rounds: json["rounds"],
+      rounds: json["rounds"] == null
+          ? null
+          : int.tryParse(json["rounds"].toString()) ?? json["rounds"],
 
+      // Routines
       routineName: json["routineName"],
+      autoSave: json["autoSave"],
+      autoStart: json["autoStart"] ?? false,
+
+      // Navigation
       target: json["target"],
 
+      // Rename
       oldName: json["oldName"],
       newName: json["newName"],
 
-      // 🔥 NEW — Parse steps list
+      // MULTI-STEP routines (strong typing)
       steps: json["steps"] != null
-          ? List<Map<String, dynamic>>.from(json["steps"])
-          .map((s) => AiStep.fromJson(s))
+          ? (json["steps"] as List)
+          .map((e) => AiStep.fromJson(e as Map<String, dynamic>))
           .toList()
           : null,
     );
