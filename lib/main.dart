@@ -10,10 +10,15 @@ import 'package:ticktalk_app/UI/stopwatch/normal_stopwatch_page.dart';
 // NEW: Welcome page
 import 'UI/welcome_page/welcome_page.dart';
 
+// 🔹 NEW: font scale
+import 'UI/settings/font_scale.dart';
+
 final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 
-void main() {
+// 🔹 CHANGED: make main async and load FontScale before runApp
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await FontScale.instance.load(); // load saved font scale
   runApp(const TickTalkApp());
 }
 
@@ -22,20 +27,40 @@ class TickTalkApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: "TickTalk",
-      theme: ThemeData.dark(),
-      navigatorObservers: [routeObserver],
+    // 🔹 NEW: rebuild when font scale changes
+    return AnimatedBuilder(
+      animation: FontScale.instance,
+      builder: (context, _) {
+        final scale = FontScale.instance.scale;
 
-      // ✅ Stopwatch routes stay the same
-      routes: {
-        "/stopwatch": (context) => const StopwatchSelectorPage(),
-        "/normalStopwatch": (context) => const NormalStopwatchPage(),
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: "TickTalk",
+          theme: ThemeData.dark(),
+          navigatorObservers: [routeObserver],
+
+          // ✅ Stopwatch routes stay the same
+          routes: {
+            "/stopwatch": (context) => const StopwatchSelectorPage(),
+            "/normalStopwatch": (context) => const NormalStopwatchPage(),
+          },
+
+          // 🔹 NEW: apply global text scale
+          builder: (context, child) {
+            if (child == null) return const SizedBox.shrink();
+            final mq = MediaQuery.of(context);
+            return MediaQuery(
+              data: mq.copyWith(
+                textScaler: TextScaler.linear(scale),
+              ),
+              child: child,
+            );
+          },
+
+          // ✅ Decide whether to show WelcomePage or MainShell
+          home: const _StartupWrapper(),
+        );
       },
-
-      // ✅ Decide whether to show WelcomePage or MainShell
-      home: const _StartupWrapper(),
     );
   }
 }
