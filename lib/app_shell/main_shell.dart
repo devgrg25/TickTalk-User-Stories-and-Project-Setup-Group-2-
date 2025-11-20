@@ -5,6 +5,8 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../UI/home/home_page.dart';
 import '../UI/timer/create_timer_page.dart';
 import '../UI/routines/routines_page.dart';
+import '../UI/stopwatch/stopwatch_selector_page.dart';
+
 import 'voice_mic_bar.dart';
 import 'voice_router.dart';
 import '../logic/voice/voice_tts_service.dart';
@@ -40,7 +42,6 @@ class _MainShellState extends State<MainShell> {
         }
       },
     );
-
   }
 
   void _returnHome() {
@@ -96,6 +97,10 @@ class _MainShellState extends State<MainShell> {
         child: CreateTimerPage(onTimerStarted: _returnHome),
       ),
       RoutinesPage(key: routinesKey),
+
+      // NEW: Stopwatch Mode Selector Page
+      const StopwatchSelectorPage(),
+
       const Center(
         child: Text(
           "Settings",
@@ -162,6 +167,14 @@ class _MainShellState extends State<MainShell> {
                 selectedIcon: Icon(Icons.list_alt),
                 label: "Routines",
               ),
+
+              // NEW STOPWATCH TAB
+              NavigationDestination(
+                icon: Icon(Icons.timer),
+                selectedIcon: Icon(Icons.timer_rounded),
+                label: "Stopwatch",
+              ),
+
               NavigationDestination(
                 icon: Icon(Icons.settings_outlined),
                 selectedIcon: Icon(Icons.settings),
