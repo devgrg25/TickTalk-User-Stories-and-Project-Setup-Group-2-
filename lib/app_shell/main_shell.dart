@@ -7,6 +7,12 @@ import '../UI/home/home_page.dart';
 import '../UI/timer/create_timer_page.dart';
 import '../UI/routines/routines_page.dart';
 import '../UI/stopwatch/stopwatch_selector_page.dart';
+import '../UI/stopwatch/normal_stopwatch_page.dart';
+import '../UI/stopwatch/stopwatch_summary_page.dart';
+import '../UI/stopwatch/player_count_selector_page.dart';
+import '../UI/stopwatch/player_mode_stopwatch_page.dart';
+
+import '../logic/stopwatch/normal_stopwatch_shared_controller.dart';
 
 import 'voice_mic_bar.dart';
 import 'voice_router.dart';
@@ -29,8 +35,17 @@ class _MainShellState extends State<MainShell> {
   bool _isListening = false;
   String _lastWords = "";
 
+  /// Shared normal stopwatch
+  final NormalStopwatchSharedController sharedNormalSW =
+  NormalStopwatchSharedController();
+
   Key createTimerKey = UniqueKey();
   final GlobalKey<RoutinesPageState> routinesKey = GlobalKey<RoutinesPageState>();
+
+  Duration? _summaryTotal;
+  List<Duration>? _summaryLaps;
+
+  int? _playerCount = 1;
 
   final stt.SpeechToText _speech = stt.SpeechToText();
   late final VoiceRouter _voiceRouter;
@@ -39,6 +54,10 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+
+    sharedNormalSW.onTick = () {
+      if (mounted) setState(() {});
+    };
 
     _voiceRouter = VoiceRouter(
       onNavigateTab: (int tabIndex) {
@@ -63,6 +82,7 @@ class _MainShellState extends State<MainShell> {
           MaterialPageRoute(builder: (_) => page),
         );
       },
+      stopwatchController: sharedNormalSW, // 🔥 REQUIRED PARAMETER
     );
 
     if (widget.startTutorial) {
@@ -226,6 +246,12 @@ class _MainShellState extends State<MainShell> {
       const SettingsPage(),            // index 4
     ];
 
+    screens[6] = StopwatchSummaryPage(
+      total: _summaryTotal,
+      laps: _summaryLaps,
+      onClose: () => setState(() => _index = 3),
+    );
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
       body: SafeArea(
@@ -266,24 +292,21 @@ class _MainShellState extends State<MainShell> {
         children: [
           NavigationBar(
             backgroundColor: const Color(0xFF1C1C1C),
-            selectedIndex: _index,
+            selectedIndex: _index.clamp(0, 4),
             indicatorColor: const Color(0xFF7A3FFF),
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             onDestinationSelected: (i) {
               setState(() => _index = i);
               if (i == 2) routinesKey.currentState?.reload();
             },
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home),
-                label: "Home",
-              ),
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: "Home"),
               NavigationDestination(
-                icon: Icon(Icons.timer_outlined),
-                selectedIcon: Icon(Icons.timer),
-                label: "Timer",
-              ),
+                  icon: Icon(Icons.timer_outlined),
+                  selectedIcon: Icon(Icons.timer),
+                  label: "Timer"),
               NavigationDestination(
                 icon: Icon(Icons.list_alt_outlined),
                 selectedIcon: Icon(Icons.list_alt),
@@ -295,10 +318,9 @@ class _MainShellState extends State<MainShell> {
                 label: "Stopwatch",
               ),
               NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: "Settings",
-              ),
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: "Settings"),
             ],
           ),
           VoiceMicBar(
