@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
+import '../UI/settings/settings.dart';
 import '../UI/home/home_page.dart';
 import '../UI/timer/create_timer_page.dart';
 import '../UI/routines/routines_page.dart';
@@ -15,10 +16,15 @@ import '../logic/stopwatch/normal_stopwatch_shared_controller.dart';
 
 import 'voice_mic_bar.dart';
 import 'voice_router.dart';
-import '../logic/voice/voice_tts_service.dart';
+import '../logic/tutorial/tutorial_controller.dart';
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  final bool startTutorial; // if true, run tutorial once on launch
+
+  const MainShell({
+    super.key,
+    this.startTutorial = false,
+  });
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -43,6 +49,7 @@ class _MainShellState extends State<MainShell> {
 
   final stt.SpeechToText _speech = stt.SpeechToText();
   late final VoiceRouter _voiceRouter;
+  late final TutorialController _tutorial;
 
   @override
   void initState() {
@@ -55,11 +62,35 @@ class _MainShellState extends State<MainShell> {
     _voiceRouter = VoiceRouter(
       onNavigateTab: (int tabIndex) {
         setState(() => _index = tabIndex);
-        if (tabIndex == 2) routinesKey.currentState?.reload();
+        if (tabIndex == 2) {
+          routinesKey.currentState?.reload();
+        }
+      },
+    );
+
+    _tutorial = TutorialController(
+      context: context,
+      goToTab: (int tabIndex) {
+        debugPrint("📘 goToTab called with index=$tabIndex");
+        setState(() => _index = tabIndex);
+        if (tabIndex == 2) {
+          routinesKey.currentState?.reload();
+        }
+      },
+      pushPage: (Widget page) async {
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => page),
+        );
       },
       stopwatchController: sharedNormalSW, // 🔥 REQUIRED PARAMETER
     );
 
+    if (widget.startTutorial) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        debugPrint("📘 MainShell: startTutorial=true → starting tutorial");
+        _tutorial.start();
+      });
+    }
   }
 
   void _returnHome() {
@@ -68,96 +99,151 @@ class _MainShellState extends State<MainShell> {
   }
 
   Future<void> _toggleMic() async {
+    // ---------------------------
+    // START LISTENING
+    // ---------------------------
     if (!_isListening) {
-      bool available = await _speech.initialize(
+      // If tutorial is running, pause it immediately when mic is tapped
+      if (_tutorial.isActive && !_tutorial.isPaused) {
+        debugPrint("📘 Mic tapped → pausing tutorial");
+        _tutorial.pause();
+      }
+
+      final available = await _speech.initialize(
         onStatus: (status) {
           if (kDebugMode) print("🎙 Status: $status");
           if (status.contains('notListening') || status.contains('done')) {
-            setState(() => _isListening = false);
+            if (mounted) {
+              setState(() => _isListening = false);
+            }
+
+            // If tutorial is active and still paused (no finalResult came), resume it
+            if (_tutorial.isActive && _tutorial.isPaused) {
+              debugPrint("📘 onStatus(done) → resuming tutorial");
+              _tutorial.resume();
+            }
           }
         },
         onError: (e) {
           if (kDebugMode) print("❌ Speech error: $e");
-          setState(() => _isListening = false);
+          if (mounted) {
+            setState(() => _isListening = false);
+          }
+
+          if (_tutorial.isActive && _tutorial.isPaused) {
+            debugPrint("📘 onError → resuming tutorial");
+            _tutorial.resume();
+          }
         },
       );
 
-      if (available) {
-        setState(() {
-          _isListening = true;
-          _lastWords = "";
-        });
+      if (!available) return;
 
-        await _speech.listen(
-          onResult: (result) {
-            setState(() => _lastWords = result.recognizedWords);
-            if (result.finalResult && _lastWords.isNotEmpty) {
-              _voiceRouter.handle(_lastWords);
+      setState(() {
+        _isListening = true;
+        _lastWords = "";
+      });
+
+      await _speech.listen(
+        listenMode: stt.ListenMode.dictation,
+        partialResults: true,
+        onResult: (result) async {
+          if (!mounted) return;
+
+          setState(() => _lastWords = result.recognizedWords);
+
+          if (!result.finalResult) return;
+
+          final lower = _lastWords.toLowerCase().trim();
+
+          // Stop listening UI
+          if (mounted) {
+            setState(() => _isListening = false);
+          }
+          try {
+            await _speech.stop();
+          } catch (_) {}
+
+          // ---------------------------
+          // WHILE TUTORIAL IS ACTIVE
+          // ---------------------------
+          if (_tutorial.isActive) {
+            final isSkipCommand =
+                lower.contains('skip') ||
+                    lower.contains('exit') ||
+                    lower.contains('stop tutorial') ||
+                    lower.contains('cancel tutorial') ||
+                    lower.contains('end tutorial');
+
+            if (isSkipCommand) {
+              debugPrint("📘 Voice: tutorial skip command detected");
+              _tutorial.stop();
+              return;
             }
-          },
-          listenMode: stt.ListenMode.dictation,
-          partialResults: true,
-        );
-      }
+
+            // No skip or unrecognized → resume tutorial
+            debugPrint("📘 Voice: non-skip during tutorial → resuming tutorial");
+            _tutorial.resume();
+            return;
+          }
+
+          // ---------------------------
+          // NORMAL BEHAVIOR (NO TUTORIAL ACTIVE)
+          // ---------------------------
+          if (lower.isEmpty) return;
+
+          // ✅ GLOBAL VOICE COMMAND TO RE-RUN TUTORIAL
+          final wantsTutorial =
+              lower.contains('start tutorial') ||
+                  lower.contains('restart tutorial') ||
+                  lower.contains('run tutorial') ||
+                  lower.contains('tutorial again') ||
+                  lower.contains('welcome page') || // if user says "go to welcome page"
+                  (lower == 'tutorial');
+
+          if (wantsTutorial) {
+            debugPrint("📘 Voice: start/restart tutorial command detected");
+            // Go to Home (optional) then start tutorial
+            setState(() => _index = 0);
+            _tutorial.start();
+            return;
+          }
+
+          // Otherwise: normal voice routing
+          _voiceRouter.handle(_lastWords);
+        },
+      );
+
+      // ---------------------------
+      // STOP LISTENING (mic already ON)
+      // ---------------------------
     } else {
-      setState(() => _isListening = false);
-      await _speech.stop();
+      if (mounted) {
+        setState(() => _isListening = false);
+      }
+      try {
+        await _speech.stop();
+      } catch (_) {}
+
+      // If user manually taps to cancel listening while tutorial was paused, resume it
+      if (_tutorial.isActive && _tutorial.isPaused) {
+        debugPrint("📘 Mic tapped again → resuming tutorial");
+        _tutorial.resume();
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final screens = [
-      const HomePage(),                                 // 0
+      const HomePage(), // index 0
       KeyedSubtree(
         key: createTimerKey,
-        child: CreateTimerPage(onTimerStarted: _returnHome),
-      ),                                                // 1
-      RoutinesPage(key: routinesKey),                   // 2
-
-      StopwatchSelectorPage(
-        onNavigate: (i) => setState(() => _index = i),
-        controller: sharedNormalSW,
-
-        // 🔥 Add this block
-        onStopFromPreview: (total, laps) {
-          _summaryTotal = total;
-          _summaryLaps = laps;
-          setState(() => _index = 6); // go to summary page
-        },
-      ),                                                // 3
-
-      const Center(
-        child: Text("Settings",
-            style: TextStyle(color: Colors.white, fontSize: 18)),
-      ),                                                // 4
-
-      NormalStopwatchPage(
-        controller: sharedNormalSW,
-        onStop: (total, laps) {
-          _summaryTotal = total;
-          _summaryLaps = laps;
-          setState(() => _index = 6);
-        },
-      ),                                                // 5
-
-      StopwatchSummaryPage(
-        total: _summaryTotal,
-        laps: _summaryLaps,
-        onClose: () => setState(() => _index = 3),
-      ),                                                // 6
-
-      PlayerCountSelectorPage(
-        onSelectPlayers: (count) {
-          _playerCount = count;
-          setState(() => _index = 8);
-        },
-      ),                                                // 7
-
-      PlayerModeStopwatchPage(
-        playerCount: _playerCount ?? 1,
-        onExit: () => setState(() => _index = 3),
-      ),                                                // 8
+        child: CreateTimerPage(onTimerStarted: _returnHome), // index 1
+      ),
+      RoutinesPage(key: routinesKey), // index 2
+      const StopwatchSelectorPage(),   // index 3
+      const SettingsPage(),            // index 4
     ];
 
     screens[6] = StopwatchSummaryPage(
@@ -178,22 +264,29 @@ class _MainShellState extends State<MainShell> {
                 left: 0,
                 right: 0,
                 bottom: 160,
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _lastWords,
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.55),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _lastWords,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
                 ),
               ),
           ],
         ),
       ),
-
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -215,21 +308,25 @@ class _MainShellState extends State<MainShell> {
                   selectedIcon: Icon(Icons.timer),
                   label: "Timer"),
               NavigationDestination(
-                  icon: Icon(Icons.list_alt_outlined),
-                  selectedIcon: Icon(Icons.list_alt),
-                  label: "Routines"),
+                icon: Icon(Icons.list_alt_outlined),
+                selectedIcon: Icon(Icons.list_alt),
+                label: "Routines",
+              ),
               NavigationDestination(
-                  icon: Icon(Icons.timer),
-                  selectedIcon: Icon(Icons.timer_rounded),
-                  label: "Stopwatch"),
+                icon: Icon(Icons.timer),
+                selectedIcon: Icon(Icons.timer_rounded),
+                label: "Stopwatch",
+              ),
               NavigationDestination(
                   icon: Icon(Icons.settings_outlined),
                   selectedIcon: Icon(Icons.settings),
                   label: "Settings"),
             ],
           ),
-
-          VoiceMicBar(isListening: _isListening, onTap: _toggleMic),
+          VoiceMicBar(
+            isListening: _isListening,
+            onTap: _toggleMic,
+          ),
         ],
       ),
     );
