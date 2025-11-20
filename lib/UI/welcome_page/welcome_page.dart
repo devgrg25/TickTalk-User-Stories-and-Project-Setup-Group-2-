@@ -4,9 +4,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../app_shell/main_shell.dart';          // new UI shell
+import '../../app_shell/main_shell.dart';
 import '../../app_shell/voice_mic_bar.dart';
-
 
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
@@ -27,8 +26,8 @@ class _WelcomePageState extends State<WelcomePage> {
 
   final String _welcomeText = '''
 Welcome to TickTalk. I’ll guide you through setup and features step by step.
-Say “start tutorial” to begin, “skip” to continue to the app, or “repeat” to hear this again.
-Tap the mic at the bottom of your screen to speak, then tap again to stop.
+Say “start tutorial” to begin the guided tour, “skip” to continue to the app, or “repeat” to hear this again.
+Tap the microphone at the bottom of your screen to speak, then tap again to stop.
 ''';
 
   @override
@@ -107,37 +106,46 @@ Tap the mic at the bottom of your screen to speak, then tap again to stop.
   }
 
   // ------------------ N A V I G A T I O N ------------------ //
-  Future<void> _goHome() async {
+
+  Future<void> _goToApp({required bool startTutorial}) async {
     try {
       await _speech.stop();
       await _tts.stop();
     } catch (_) {}
-    if (!mounted) return;
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const MainShell()),
-    );
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hasSeenWelcome', true);
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => MainShell(
+          startTutorial: startTutorial, // 👈 tells MainShell to run tutorial or not
+        ),
+      ),
+    );
   }
 
   Future<void> _handle(String words) async {
     bool has(String s) => words.contains(s);
 
+    // repeat intro
     if (has('repeat')) {
       await _tts.stop();
       await _tts.speak(_welcomeText);
       return;
     }
 
-    if (has('start tutorial') || has('start the tutorial') || has('start')) {
-      await _goHome(); // for now just enter the app
+    // ✅ Only here: "start" / "start tutorial" trigger guided tutorial
+    if (has('start tutorial') || words.trim() == 'start') {
+      await _goToApp(startTutorial: true);
       return;
     }
 
+    // skip / continue without tutorial
     if (has('skip') || has('continue')) {
-      await _goHome();
+      await _goToApp(startTutorial: false);
       return;
     }
   }
@@ -183,8 +191,8 @@ Tap the mic at the bottom of your screen to speak, then tap again to stop.
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  'Say:  “start tutorial”, “skip”, or “repeat”.\n\n'
-                      'Tap the mic below to speak, and tap again to stop.',
+                  'Say: “start tutorial”, “skip”, or “repeat”.\n\n'
+                      'Tap the microphone below to speak, and tap again to stop.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context)
                       .textTheme
@@ -235,7 +243,7 @@ Tap the mic at the bottom of your screen to speak, then tap again to stop.
               ],
             ),
 
-            // --------- Bottom mic (same component as home) ---------
+            // --------- Bottom mic (shared component) ---------
             Align(
               alignment: Alignment.bottomCenter,
               child: SafeArea(
