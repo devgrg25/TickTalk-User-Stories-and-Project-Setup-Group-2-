@@ -34,12 +34,12 @@ jobs:
 
       # Build APK (Only runs if a tag is pushed)
       - name: Build APK
-        #if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/')
         run: flutter build apk --release
 
       # Upload the APK as CI artifact (Only runs if a tag is pushed)
       - name: Upload APK
-        #if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
