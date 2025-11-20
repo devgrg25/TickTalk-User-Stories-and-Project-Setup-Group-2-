@@ -6,6 +6,12 @@ import '../UI/home/home_page.dart';
 import '../UI/timer/create_timer_page.dart';
 import '../UI/routines/routines_page.dart';
 import '../UI/stopwatch/stopwatch_selector_page.dart';
+import '../UI/stopwatch/normal_stopwatch_page.dart';
+import '../UI/stopwatch/stopwatch_summary_page.dart';
+import '../UI/stopwatch/player_count_selector_page.dart';
+import '../UI/stopwatch/player_mode_stopwatch_page.dart';
+
+import '../logic/stopwatch/normal_stopwatch_shared_controller.dart';
 
 import 'voice_mic_bar.dart';
 import 'voice_router.dart';
@@ -23,8 +29,17 @@ class _MainShellState extends State<MainShell> {
   bool _isListening = false;
   String _lastWords = "";
 
+  /// Shared normal stopwatch
+  final NormalStopwatchSharedController sharedNormalSW =
+  NormalStopwatchSharedController();
+
   Key createTimerKey = UniqueKey();
   final GlobalKey<RoutinesPageState> routinesKey = GlobalKey<RoutinesPageState>();
+
+  Duration? _summaryTotal;
+  List<Duration>? _summaryLaps;
+
+  int? _playerCount = 1;
 
   final stt.SpeechToText _speech = stt.SpeechToText();
   late final VoiceRouter _voiceRouter;
@@ -33,13 +48,14 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
 
+    sharedNormalSW.onTick = () {
+      if (mounted) setState(() {});
+    };
+
     _voiceRouter = VoiceRouter(
       onNavigateTab: (int tabIndex) {
         setState(() => _index = tabIndex);
-
-        if (tabIndex == 2) {
-          routinesKey.currentState?.reload();
-        }
+        if (tabIndex == 2) routinesKey.currentState?.reload();
       },
     );
   }
@@ -73,7 +89,6 @@ class _MainShellState extends State<MainShell> {
         await _speech.listen(
           onResult: (result) {
             setState(() => _lastWords = result.recognizedWords);
-
             if (result.finalResult && _lastWords.isNotEmpty) {
               _voiceRouter.handle(_lastWords);
             }
@@ -91,23 +106,63 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      const HomePage(),
+      const HomePage(),                                 // 0
       KeyedSubtree(
         key: createTimerKey,
         child: CreateTimerPage(onTimerStarted: _returnHome),
-      ),
-      RoutinesPage(key: routinesKey),
+      ),                                                // 1
+      RoutinesPage(key: routinesKey),                   // 2
 
-      // NEW: Stopwatch Mode Selector Page
-      const StopwatchSelectorPage(),
+      StopwatchSelectorPage(
+        onNavigate: (i) => setState(() => _index = i),
+        controller: sharedNormalSW,
+
+        // 🔥 Add this block
+        onStopFromPreview: (total, laps) {
+          _summaryTotal = total;
+          _summaryLaps = laps;
+          setState(() => _index = 6); // go to summary page
+        },
+      ),                                                // 3
 
       const Center(
-        child: Text(
-          "Settings",
-          style: TextStyle(color: Colors.white, fontSize: 18),
-        ),
-      ),
+        child: Text("Settings",
+            style: TextStyle(color: Colors.white, fontSize: 18)),
+      ),                                                // 4
+
+      NormalStopwatchPage(
+        controller: sharedNormalSW,
+        onStop: (total, laps) {
+          _summaryTotal = total;
+          _summaryLaps = laps;
+          setState(() => _index = 6);
+        },
+      ),                                                // 5
+
+      StopwatchSummaryPage(
+        total: _summaryTotal,
+        laps: _summaryLaps,
+        onClose: () => setState(() => _index = 3),
+      ),                                                // 6
+
+      PlayerCountSelectorPage(
+        onSelectPlayers: (count) {
+          _playerCount = count;
+          setState(() => _index = 8);
+        },
+      ),                                                // 7
+
+      PlayerModeStopwatchPage(
+        playerCount: _playerCount ?? 1,
+        onExit: () => setState(() => _index = 3),
+      ),                                                // 8
     ];
+
+    screens[6] = StopwatchSummaryPage(
+      total: _summaryTotal,
+      laps: _summaryLaps,
+      onClose: () => setState(() => _index = 3),
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
@@ -121,17 +176,15 @@ class _MainShellState extends State<MainShell> {
                 left: 0,
                 right: 0,
                 bottom: 160,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.55),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      _lastWords,
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                    ),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _lastWords,
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
                   ),
                 ),
               ),
@@ -144,49 +197,37 @@ class _MainShellState extends State<MainShell> {
         children: [
           NavigationBar(
             backgroundColor: const Color(0xFF1C1C1C),
-            selectedIndex: _index,
+            selectedIndex: _index.clamp(0, 4),
             indicatorColor: const Color(0xFF7A3FFF),
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             onDestinationSelected: (i) {
               setState(() => _index = i);
               if (i == 2) routinesKey.currentState?.reload();
             },
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home),
-                label: "Home",
-              ),
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: "Home"),
               NavigationDestination(
-                icon: Icon(Icons.timer_outlined),
-                selectedIcon: Icon(Icons.timer),
-                label: "Timer",
-              ),
+                  icon: Icon(Icons.timer_outlined),
+                  selectedIcon: Icon(Icons.timer),
+                  label: "Timer"),
               NavigationDestination(
-                icon: Icon(Icons.list_alt_outlined),
-                selectedIcon: Icon(Icons.list_alt),
-                label: "Routines",
-              ),
-
-              // NEW STOPWATCH TAB
+                  icon: Icon(Icons.list_alt_outlined),
+                  selectedIcon: Icon(Icons.list_alt),
+                  label: "Routines"),
               NavigationDestination(
-                icon: Icon(Icons.timer),
-                selectedIcon: Icon(Icons.timer_rounded),
-                label: "Stopwatch",
-              ),
-
+                  icon: Icon(Icons.timer),
+                  selectedIcon: Icon(Icons.timer_rounded),
+                  label: "Stopwatch"),
               NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: "Settings",
-              ),
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: "Settings"),
             ],
           ),
 
-          VoiceMicBar(
-            isListening: _isListening,
-            onTap: _toggleMic,
-          ),
+          VoiceMicBar(isListening: _isListening, onTap: _toggleMic),
         ],
       ),
     );
