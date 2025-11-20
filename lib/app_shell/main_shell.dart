@@ -57,7 +57,9 @@ class _MainShellState extends State<MainShell> {
         setState(() => _index = tabIndex);
         if (tabIndex == 2) routinesKey.currentState?.reload();
       },
+      stopwatchController: sharedNormalSW, // 🔥 REQUIRED PARAMETER
     );
+
   }
 
   void _returnHome() {
