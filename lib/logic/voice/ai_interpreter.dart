@@ -7,7 +7,7 @@ class AiInterpreter {
   static bool useCloudflare = true;
 
   // 👉 Change ONLY this URL each time Cloudflare Tunnel gives you a new one
-  static String cloudflareUrl = "https://fantastic-deserve-wells-advise.trycloudflare.com";
+  static String cloudflareUrl = "https://presentations-declared-truck-leeds.trycloudflare.com";
 
   // 👉 Home local network (not used on eduroam)
   static String localUrl = "http://192.168.0.121:8000";
@@ -35,12 +35,21 @@ class AiInterpreter {
       }
 
       final data = jsonDecode(response.body);
-      if (data is Map<String, dynamic>) {
-        return AiCommand.fromJson(data);
+
+      if (data is! Map<String, dynamic>) {
+        print("❌ AI response was not JSON Map");
+        return null;
       }
 
-      print("❌ AI response was not JSON Map");
-      return null;
+      final cmd = AiCommand.fromJson(data);
+
+      // 🔥 NEW DEBUGGING — show steps if backend sent any
+      if (cmd.steps != null) {
+        print("🧩 Parsed ${cmd.steps!.length} routine steps");
+      }
+
+      return cmd;
+
     } catch (e) {
       print("❌ AI interpreter exception: $e");
       return null;

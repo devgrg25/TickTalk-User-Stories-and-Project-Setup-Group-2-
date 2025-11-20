@@ -1,5 +1,5 @@
 // -------------------------------------------------------------
-// VOICE ROUTER – UPDATED VERSION (LOCAL TIMER CREATION REMOVED)
+// VOICE ROUTER – STOPWATCH + TIMER + ROUTINES + NAVIGATION
 // -------------------------------------------------------------
 
 import 'dart:async';
@@ -15,14 +15,22 @@ import '../logic/voice/ai_command.dart';
 import '../logic/routines/routine_storage.dart';
 import '../logic/routines/routine_model.dart';
 
+// 🔥 NEW — import shared stopwatch controller
+import '../logic/stopwatch/normal_stopwatch_shared_controller.dart';
+
 typedef TabNavigator = void Function(int index);
 
 class VoiceRouter {
-  VoiceRouter({required this.onNavigateTab});
   final TabNavigator onNavigateTab;
+  final NormalStopwatchSharedController stopwatchController; // NEW!
+
+  VoiceRouter({
+    required this.onNavigateTab,
+    required this.stopwatchController,
+  });
 
   // -------------------------------------------------------------
-  // ROUTINE BUILDER STATE (LOCAL)
+  // ROUTINE BUILDER STATE (UNCHANGED)
   // -------------------------------------------------------------
   bool _isBuildingRoutine = false;
   String? _routineName;
@@ -37,7 +45,14 @@ class VoiceRouter {
 
     print("🎤 VoiceRouter received: $raw");
 
-    // Cancel routine builder
+    // -------------------------------------------------------------
+    // 🔥 1. GLOBAL STOPWATCH COMMANDS (Highest Priority)
+    // -------------------------------------------------------------
+    if (await _handleStopwatchCommands(input)) return;
+
+    // -------------------------------------------------------------
+    // 2. Routine-building mode
+    // -------------------------------------------------------------
     if (_isBuildingRoutine &&
         (input.contains("cancel") ||
             input.contains("never mind") ||
@@ -46,23 +61,22 @@ class VoiceRouter {
       return _cancelRoutineBuilder();
     }
 
-    // Continue routine builder
     if (_isBuildingRoutine) return _handleRoutineBuilder(input);
 
-    // Start local routine builder
     if (_detectRoutineStart(input)) return _startRoutineBuilder();
 
-    // Local timer controls (pause/resume/stop ONLY)
+    // -------------------------------------------------------------
+    // 3. Local timer controls
+    // -------------------------------------------------------------
     if (await _handleLocalTimerControls(input)) return;
 
-    // ⛔ REMOVED: Local quick timer creation logic
-    // (Previously: if (_handleLocalQuickTimer) return;)
-
-    // Navigation
+    // -------------------------------------------------------------
+    // 4. Navigation
+    // -------------------------------------------------------------
     if (await _handleNavigation(input)) return;
 
     // -------------------------------------------------------------
-    // BACKEND FALLBACK
+    // 5. BACKEND FALLBACK
     // -------------------------------------------------------------
     print("⚠ AI fallback triggered for: $raw");
     final ai = await AiInterpreter.interpret(raw);
@@ -74,7 +88,152 @@ class VoiceRouter {
   }
 
   // -------------------------------------------------------------
-  // ROUTINE BUILDER (NO CHANGE)
+  // 🔥 STOPWATCH COMMANDS (NORMAL STOPWATCH)
+  // -------------------------------------------------------------
+  Future<bool> _handleStopwatchCommands(String input) async {
+    // OPEN STOPWATCH PAGE
+    if (input.contains("open stopwatch") ||
+        input.contains("go to stopwatch")) {
+      onNavigateTab(5);
+      await VoiceTtsService.instance.speak("Opening stopwatch.");
+      return true;
+    }
+
+    // START
+    if (input.contains("start") && input.contains("stopwatch")) {
+      stopwatchController.start();
+      await VoiceTtsService.instance.speak("Stopwatch started.");
+      return true;
+    }
+
+    // PAUSE
+    if (input.contains("pause stopwatch") ||
+        input == "pause" ||
+        input.contains("hold stopwatch")) {
+      stopwatchController.pause();
+      await VoiceTtsService.instance.speak("Paused.");
+      return true;
+    }
+
+    // RESUME
+    if (input.contains("resume stopwatch") ||
+        input.contains("continue stopwatch") ||
+        input == "resume" ||
+        input == "continue") {
+      stopwatchController.resume();
+      await VoiceTtsService.instance.speak("Resumed.");
+      return true;
+    }
+
+    // LAP
+    if (input.contains("lap") ||
+        input.contains("add lap") ||
+        input.contains("mark lap")) {
+      stopwatchController.lap();
+      await VoiceTtsService.instance.speak("Lap recorded.");
+      return true;
+    }
+
+    // STOP + GO TO SUMMARY
+    if (input.contains("stop stopwatch") ||
+        (input.contains("stop") && stopwatchController.isRunning)) {
+
+      final total = stopwatchController.elapsed;
+      final laps = List<Duration>.from(stopwatchController.laps);
+
+      stopwatchController.stop();
+      stopwatchController.reset();
+
+      // OPEN SUMMARY PAGE
+      onNavigateTab(6);
+
+      VoiceTtsService.instance.speak("Stopwatch stopped. Showing summary.");
+      return true;
+    }
+
+    // RESET
+    if (input.contains("reset stopwatch") ||
+        input == "reset") {
+      stopwatchController.reset();
+      await VoiceTtsService.instance.speak("Stopwatch reset.");
+      return true;
+    }
+
+    return false;
+  }
+
+  // -------------------------------------------------------------
+  // LOCAL TIMER CONTROLS (UNCHANGED)
+  // -------------------------------------------------------------
+  ActiveTimer? _findTimerByName(String query) {
+    final timers = TimerManager.instance.timers;
+    query = query.toLowerCase().trim();
+
+    for (final t in timers) {
+      if (t.name.toLowerCase() == query) return t;
+    }
+
+    for (final t in timers) {
+      if (t.name.toLowerCase().contains(query)) return t;
+    }
+
+    return null;
+  }
+
+  Future<bool> _handleLocalTimerControls(String input) async {
+    final timers = TimerManager.instance.timers;
+
+    if (timers.isEmpty) return false;
+
+    for (final t in timers) {
+      final name = t.name.toLowerCase();
+
+      if (input.contains("pause") && input.contains(name)) {
+        t.controller.pause();
+        await VoiceTtsService.instance.speak("Paused ${t.name}.");
+        return true;
+      }
+
+      if ((input.contains("resume") || input.contains("continue")) &&
+          input.contains(name)) {
+        t.controller.resume();
+        await VoiceTtsService.instance.speak("Resuming ${t.name}.");
+        return true;
+      }
+
+      if ((input.contains("stop") || input.contains("cancel")) &&
+          input.contains(name)) {
+        TimerManager.instance.stopTimer(t.id);
+        await VoiceTtsService.instance.speak("Stopped ${t.name}.");
+        return true;
+      }
+    }
+
+    final active = timers.last;
+
+    if (input.contains("pause")) {
+      active.controller.pause();
+      await VoiceTtsService.instance.speak("Timer paused.");
+      return true;
+    }
+
+    if (input.contains("resume") || input.contains("continue")) {
+      active.controller.resume();
+      await VoiceTtsService.instance.speak("Resuming timer.");
+      return true;
+    }
+
+    if (input.contains("stop") || input.contains("cancel timer")) {
+      TimerManager.instance.stopTimer(active.id);
+      await VoiceTtsService.instance.speak("Timer stopped.");
+      return true;
+    }
+
+    return false;
+  }
+
+  // -------------------------------------------------------------
+  // ROUTINE BUILDER FUNCTIONS (UNCHANGED)
   // -------------------------------------------------------------
   bool _detectRoutineStart(String input) {
     return input.contains("create routine") ||
@@ -186,223 +345,264 @@ class VoiceRouter {
   }
 
   // -------------------------------------------------------------
-  // LOCAL TIMER CONTROLS (PAUSE/RESUME/STOP ONLY)
-  // -------------------------------------------------------------
-  ActiveTimer? _findTimerByName(String query) {
-    final timers = TimerManager.instance.timers;
-    query = query.toLowerCase().trim();
-
-    // Exact match
-    for (final t in timers) {
-      if (t.name.toLowerCase() == query) return t;
-    }
-
-    // Partial match
-    for (final t in timers) {
-      if (t.name.toLowerCase().contains(query)) return t;
-    }
-
-    return null;
-  }
-
-  Future<bool> _handleLocalTimerControls(String input) async {
-    final timers = TimerManager.instance.timers;
-
-    if (timers.isEmpty) return false;
-
-    // Try to match "pause X timer", "stop Y", "resume study timer"
-    for (final t in timers) {
-      final name = t.name.toLowerCase();
-
-      // PAUSE SPECIFIC
-      if (input.contains("pause") && input.contains(name)) {
-        t.controller.pause();
-        await VoiceTtsService.instance.speak("Paused ${t.name}.");
-        return true;
-      }
-
-      // RESUME SPECIFIC
-      if ((input.contains("resume") || input.contains("continue")) &&
-          input.contains(name)) {
-        t.controller.resume();
-        await VoiceTtsService.instance.speak("Resuming ${t.name}.");
-        return true;
-      }
-
-      // STOP SPECIFIC
-      if ((input.contains("stop") || input.contains("cancel")) &&
-          input.contains(name)) {
-        TimerManager.instance.stopTimer(t.id);
-        await VoiceTtsService.instance.speak("Stopped ${t.name}.");
-        return true;
-      }
-    }
-
-    // FALLBACK — acts on last active timer
-    final active = timers.last;
-
-    if (input.contains("pause")) {
-      active.controller.pause();
-      await VoiceTtsService.instance.speak("Timer paused.");
-      return true;
-    }
-
-    if (input.contains("resume") || input.contains("continue")) {
-      active.controller.resume();
-      await VoiceTtsService.instance.speak("Resuming timer.");
-      return true;
-    }
-
-    if (input.contains("stop") || input.contains("cancel timer")) {
-      TimerManager.instance.stopTimer(active.id);
-      await VoiceTtsService.instance.speak("Timer stopped.");
-      return true;
-    }
-
-    return false;
-  }
-
-  // -------------------------------------------------------------
-  // BACKEND COMMAND EXECUTION (UNCHANGED)
+  // BACKEND COMMAND EXECUTION — RESTORED + DELETE ADDED
   // -------------------------------------------------------------
   Future<void> _executeAi(AiCommand cmd) async {
     switch (cmd.type) {
+    // ---------------------------------------------------------
+// MULTI STEP ROUTINE (NEW)
+// ---------------------------------------------------------
+      case "start_multi_step_routine":
+        final steps = cmd.steps;
+
+        if (steps == null || steps.isEmpty) {
+          await VoiceTtsService.instance.speak(
+              "I couldn't detect multiple steps."
+          );
+          return;
+        }
+
+        final intervals = <TimerInterval>[];
+        final summary = StringBuffer("Routine with: ");
+
+        for (final s in steps) {
+          intervals.add(TimerInterval(name: s.label, seconds: s.seconds));
+          summary.write("${s.label} for ${_spokenDuration(s.seconds)}, ");
+        }
+
+        await VoiceTtsService.instance.speak(summary.toString());
+
+        // Ask to save
+        await VoiceTtsService.instance.speak(
+            "Would you like to save this routine?");
+        final save = await _askYesNo(null);
+
+        String routineName = "Custom Routine";
+
+        if (save == true) {
+          await VoiceTtsService.instance
+              .speak("What should I call this routine?");
+          final heard = await VoiceSttService.instance.listenOnce();
+          if (heard != null && heard.trim().isNotEmpty) {
+            routineName = heard.trim();
+          }
+
+          await RoutineStorage.instance.saveRoutine(
+            Routine(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              name: routineName,
+              intervals: intervals,
+            ),
+          );
+
+          await VoiceTtsService.instance.speak("Saved as $routineName.");
+        }
+
+        // Start?
+        await VoiceTtsService.instance.speak(
+            "Should I start this routine now?");
+        final start = await _askYesNo(null);
+
+        if (start == true) {
+          TimerManager.instance.startTimer(routineName, intervals);
+          await VoiceTtsService.instance
+              .speak("Starting routine now.");
+        } else {
+          await VoiceTtsService.instance
+              .speak("Okay, not starting.");
+        }
+
+        return;
+
+
+    // ---------------------------------------------------------
+    // START TIMER
+    // ---------------------------------------------------------
       case "start_timer":
         final sec = cmd.seconds ?? 0;
         final label = cmd.label ?? "Timer";
 
-        TimerManager.instance.startTimer(
-            label, [TimerInterval(name: label, seconds: sec)]);
-        await VoiceTtsService.instance
-            .speak("Starting $label for ${_spokenDuration(sec)}.");
-        break;
+        await VoiceTtsService.instance.speak(
+            "$label for ${_spokenDuration(sec)}.");
 
+        await VoiceTtsService.instance.speak(
+            "Would you like to save this timer as a routine?");
+
+        final save = await _askYesNo(null);
+
+        if (save == true) {
+          final routine = Routine(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            name: label,
+            intervals: [TimerInterval(name: label, seconds: sec)],
+          );
+          await RoutineStorage.instance.saveRoutine(routine);
+          await VoiceTtsService.instance.speak("Saved to routines.");
+        }
+
+        await VoiceTtsService.instance.speak("Should I start it now?");
+        final startNow = await _askYesNo(null);
+
+        if (startNow == true) {
+          TimerManager.instance.startTimer(
+            label,
+            [TimerInterval(name: label, seconds: sec)],
+          );
+          await VoiceTtsService.instance.speak("Starting $label.");
+        }
+
+        return;
+
+    // ---------------------------------------------------------
+    // START INTERVAL TIMER (WORK / REST / ROUNDS)
+    // ---------------------------------------------------------
       case "start_interval_timer":
         final label2 = cmd.label ?? "Interval";
-        final w = cmd.workSeconds ?? 60;
-        final r = cmd.restSeconds ?? 10;
+        final work = cmd.workSeconds ?? 60;
+        final rest = cmd.restSeconds ?? 10;
         final rounds = cmd.rounds ?? 4;
 
         final intervals = <TimerInterval>[];
         for (int i = 0; i < rounds; i++) {
-          intervals.add(TimerInterval(name: "$label2 Work", seconds: w));
+          intervals.add(TimerInterval(name: "$label2 Work", seconds: work));
           if (i < rounds - 1) {
-            intervals.add(TimerInterval(name: "$label2 Rest", seconds: r));
+            intervals.add(TimerInterval(name: "$label2 Rest", seconds: rest));
           }
         }
 
         await VoiceTtsService.instance.speak(
-            "$rounds rounds of ${w ~/ 60 > 0 ? "${w ~/ 60} minute work" : "$w seconds work"} "
-                "and ${r ~/ 60 > 0 ? "${r ~/ 60} minute rest" : "$r seconds rest"}.");
+            "$rounds rounds of ${_spokenDuration(work)} work and ${_spokenDuration(rest)} rest.");
 
-        await VoiceTtsService.instance.speak("Save this routine?");
-        final save = await _askYesNo(null);
+        await VoiceTtsService.instance.speak(
+            "Would you like to save this interval routine?");
 
-        if (save == true) {
+        final save2 = await _askYesNo(null);
+
+        if (save2 == true) {
           final routine = Routine(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
             name: label2,
             intervals: intervals,
           );
           await RoutineStorage.instance.saveRoutine(routine);
-          await VoiceTtsService.instance.speak("Saved.");
+          await VoiceTtsService.instance.speak("Saved to routines.");
         }
 
-        await VoiceTtsService.instance.speak("Start it now?");
-        final start = await _askYesNo(null);
+        await VoiceTtsService.instance.speak("Should I start this routine now?");
+        final startNow2 = await _askYesNo(null);
 
-        if (start == true) {
+        if (startNow2 == true) {
           TimerManager.instance.startTimer(label2, intervals);
           await VoiceTtsService.instance.speak("Starting $label2.");
         }
 
-        break;
+        return;
 
+    // ---------------------------------------------------------
+    // PAUSE/RESUME/STOP
+    // ---------------------------------------------------------
       case "pause_timer":
-        final active1 = TimerManager.instance.timers.isNotEmpty
+        final p = TimerManager.instance.timers.isNotEmpty
             ? TimerManager.instance.timers.last
             : null;
-        if (active1 != null) active1.controller.pause();
+        if (p != null) p.controller.pause();
         await VoiceTtsService.instance.speak("Timer paused.");
-        break;
+        return;
 
       case "resume_timer":
-        final active2 = TimerManager.instance.timers.isNotEmpty
+        final r = TimerManager.instance.timers.isNotEmpty
             ? TimerManager.instance.timers.last
             : null;
-        if (active2 != null) active2.controller.resume();
-        await VoiceTtsService.instance.speak("Resuming.");
-        break;
+        if (r != null) r.controller.resume();
+        await VoiceTtsService.instance.speak("Resuming timer.");
+        return;
 
       case "stop_timer":
-        final active3 = TimerManager.instance.timers.isNotEmpty
+        final s = TimerManager.instance.timers.isNotEmpty
             ? TimerManager.instance.timers.last
             : null;
-        if (active3 != null) {
-          TimerManager.instance.stopTimer(active3.id);
-        }
+        if (s != null) TimerManager.instance.stopTimer(s.id);
         await VoiceTtsService.instance.speak("Timer stopped.");
-        break;
+        return;
 
+    // ---------------------------------------------------------
+    // NAVIGATION
+    // ---------------------------------------------------------
+      case "navigate":
+        if (cmd.target != null) {
+          await _handleNavigation(cmd.target!.toLowerCase());
+        }
+        return;
+
+    // ---------------------------------------------------------
+    // START ROUTINE
+    // ---------------------------------------------------------
       case "start_routine":
-        final qStart = cmd.routineName?.trim().toLowerCase();
-        if (qStart == null || qStart.isEmpty) {
-          await VoiceTtsService.instance
-              .speak("Which routine would you like to start?");
-          break;
+        final query = cmd.routineName?.toLowerCase().trim();
+        if (query == null || query.isEmpty) {
+          await VoiceTtsService.instance.speak(
+              "Which routine would you like to start?");
+          return;
         }
 
-        final all = await RoutineStorage.instance.loadRoutines();
-
-        Routine? found;
-        for (final r in all) {
-          final n = r.name.toLowerCase();
-          if (n == qStart || n.contains(qStart)) found = r;
-        }
-
-        if (found == null) {
-          await VoiceTtsService.instance.speak("No routine named $qStart.");
-          break;
-        }
-
-        TimerManager.instance.startTimer(found.name, found.intervals);
-        await VoiceTtsService.instance
-            .speak("Starting routine ${found.name}.");
-        break;
-
-      case "list_routines":
         final routines = await RoutineStorage.instance.loadRoutines();
-        if (routines.isEmpty) {
-          await VoiceTtsService.instance
-              .speak("You don't have any routines saved.");
-          break;
-        }
-        final names = routines.map((e) => e.name).join(", ");
-        await VoiceTtsService.instance.speak("Your routines are: $names.");
-        break;
-
-      case "preview_routine":
-        final qPrev = cmd.routineName?.trim().toLowerCase();
-        if (qPrev == null || qPrev.isEmpty) {
-          await VoiceTtsService.instance
-              .speak("Which routine would you like to preview?");
-          break;
-        }
-
-        final routinesP = await RoutineStorage.instance.loadRoutines();
-        Routine? foundP;
-        for (final r in routinesP) {
+        Routine? match;
+        for (final r in routines) {
           final n = r.name.toLowerCase();
-          if (n == qPrev || n.contains(qPrev)) foundP = r;
+          if (n == query || n.contains(query)) match = r;
         }
 
-        if (foundP == null) {
-          await VoiceTtsService.instance.speak("I couldn't find $qPrev.");
-          break;
+        if (match == null) {
+          await VoiceTtsService.instance.speak("I couldn't find $query.");
+          return;
+        }
+
+        TimerManager.instance.startTimer(match.name, match.intervals);
+
+        await VoiceTtsService.instance.speak("Starting ${match.name}.");
+        return;
+
+    // ---------------------------------------------------------
+    // LIST ROUTINES
+    // ---------------------------------------------------------
+      case "list_routines":
+        final list = await RoutineStorage.instance.loadRoutines();
+        if (list.isEmpty) {
+          await VoiceTtsService.instance.speak(
+              "You have no routines saved.");
+          return;
+        }
+
+        await VoiceTtsService.instance.speak(
+          "Your routines are: ${list.map((r) => r.name).join(", ")}.",
+        );
+        return;
+
+    // ---------------------------------------------------------
+    // PREVIEW ROUTINE
+    // ---------------------------------------------------------
+      case "preview_routine":
+        final query2 = cmd.routineName?.trim().toLowerCase();
+        if (query2 == null || query2.isEmpty) {
+          await VoiceTtsService.instance.speak(
+              "Which routine should I preview?");
+          return;
+        }
+
+        final rl = await RoutineStorage.instance.loadRoutines();
+        Routine? match2;
+        for (final r in rl) {
+          final n = r.name.toLowerCase();
+          if (n == query2 || n.contains(query2)) match2 = r;
+        }
+
+        if (match2 == null) {
+          await VoiceTtsService.instance.speak("I couldn't find $query2.");
+          return;
         }
 
         final buf = StringBuffer();
-        for (final step in foundP.intervals) {
+        for (final step in match2.intervals) {
           final mins = step.seconds ~/ 60;
           final secs = step.seconds % 60;
           if (mins > 0 && secs > 0)
@@ -413,123 +613,163 @@ class VoiceRouter {
             buf.write("${step.name} for $secs seconds, ");
         }
 
-        await VoiceTtsService.instance
-            .speak("Steps in ${foundP.name}: ${buf.toString()}");
-        break;
-
-      case "delete_routine":
-        final qDel = cmd.routineName?.trim().toLowerCase();
-        if (qDel == null || qDel.isEmpty) {
-          await VoiceTtsService.instance
-              .speak("Which routine should I delete?");
-          break;
-        }
-
-        final routinesD = await RoutineStorage.instance.loadRoutines();
-        Routine? foundD;
-        for (final r in routinesD) {
-          if (r.name.toLowerCase() == qDel ||
-              r.name.toLowerCase().contains(qDel)) {
-            foundD = r;
-            break;
-          }
-        }
-
-        if (foundD == null) {
-          await VoiceTtsService.instance
-              .speak("I couldn't find routine $qDel.");
-          break;
-        }
-
-        await RoutineStorage.instance.deleteRoutine(foundD.id);
-        await VoiceTtsService.instance
-            .speak("Deleted routine ${foundD.name}.");
-        break;
-
-      case "rename_routine":
-        final oldName = cmd.oldName?.trim().toLowerCase();
-        final newName = cmd.newName?.trim();
-
-        if (oldName == null || newName == null || newName.isEmpty) {
-          await VoiceTtsService.instance
-              .speak("I need both the old and new routine names.");
-          break;
-        }
-
-        final routinesR = await RoutineStorage.instance.loadRoutines();
-        Routine? foundR;
-        for (final r in routinesR) {
-          if (r.name.toLowerCase() == oldName ||
-              r.name.toLowerCase().contains(oldName)) {
-            foundR = r;
-            break;
-          }
-        }
-
-        if (foundR == null) {
-          await VoiceTtsService.instance
-              .speak("I couldn't find routine $oldName.");
-          break;
-        }
-
-        final updated = Routine(
-          id: foundR.id,
-          name: newName,
-          intervals: foundR.intervals,
+        await VoiceTtsService.instance.speak(
+          "Steps in ${match2.name}: ${buf.toString()}",
         );
+        return;
 
-        await RoutineStorage.instance.saveRoutine(updated);
-        await VoiceTtsService.instance
-            .speak("Renamed ${foundR.name} to $newName.");
-        break;
+    // ---------------------------------------------------------
+    // 🚀 ADDED: DELETE ROUTINE
+    // ---------------------------------------------------------
+      case "delete_routine":
+        final delName = cmd.routineName?.toLowerCase().trim();
 
-      case "edit_routine":
-        final qEdit = cmd.routineName?.trim().toLowerCase();
-        if (qEdit == null || qEdit.isEmpty) {
-          await VoiceTtsService.instance
-              .speak("Which routine would you like to edit?");
-          break;
+        if (delName == null || delName.isEmpty) {
+          await VoiceTtsService.instance.speak(
+            "Which routine should I delete?",
+          );
+          return;
         }
 
-        final routinesE = await RoutineStorage.instance.loadRoutines();
-        Routine? foundE;
-        for (final r in routinesE) {
-          if (r.name.toLowerCase() == qEdit ||
-              r.name.toLowerCase().contains(qEdit)) {
-            foundE = r;
+        final routinesDel = await RoutineStorage.instance.loadRoutines();
+
+        Routine? toDelete;
+        for (final r in routinesDel) {
+          final n = r.name.toLowerCase();
+          if (n == delName || n.contains(delName)) {
+            toDelete = r;
             break;
           }
         }
 
-        if (foundE == null) {
-          await VoiceTtsService.instance
-              .speak("I couldn't find routine $qEdit.");
-          break;
-        }
-
-        final bufE = StringBuffer();
-        for (final step in foundE.intervals) {
-          final mins = step.seconds ~/ 60;
-          final secs = step.seconds % 60;
-          if (mins > 0 && secs > 0)
-            bufE.write("${step.name} for $mins minutes $secs seconds, ");
-          else if (mins > 0)
-            bufE.write("${step.name} for $mins minutes, ");
-          else
-            bufE.write("${step.name} for $secs seconds, ");
+        if (toDelete == null) {
+          await VoiceTtsService.instance.speak("I couldn't find $delName.");
+          return;
         }
 
         await VoiceTtsService.instance.speak(
-          "Here are the steps in ${foundE.name}: ${bufE.toString()}",
+            "Are you sure you want to delete ${toDelete.name}?");
+        final confirm = await _askYesNo(null);
+
+        if (confirm == true) {
+          await RoutineStorage.instance.deleteRoutine(toDelete.id);
+          await VoiceTtsService.instance
+              .speak("Deleted ${toDelete.name}.");
+        } else {
+          await VoiceTtsService.instance.speak("Okay, I won't delete it.");
+        }
+
+        return;
+
+    // ---------------------------------------------------------
+    // ---------------------------------------------------------
+    // MULTI-STEP ROUTINE FROM BACKEND
+    // ---------------------------------------------------------
+      case "start_multi_step_routine":
+        final steps = cmd.steps;
+        if (steps == null || steps.isEmpty) {
+          await VoiceTtsService.instance.speak(
+            "I couldn’t understand the routine steps.",
+          );
+          return;
+        }
+
+        // Build timer intervals from backend steps
+        final intervals = <TimerInterval>[];
+        for (final s in steps) {
+          intervals.add(
+            TimerInterval(name: s.label, seconds: s.seconds),
+          );
+        }
+
+        // Routine name (backend label OR joined step labels)
+        final routineName = cmd.label ??
+            steps.map((s) => s.label).join(" + ");
+
+        // 1. Speak summary
+        await VoiceTtsService.instance.speak(
+          "I created a routine with ${steps.length} steps.",
         );
-        await VoiceTtsService.instance
-            .speak("Editing is coming soon. What else would you like?");
-        break;
+
+        // 2. Ask to save
+        await VoiceTtsService.instance.speak(
+            "Would you like me to save this routine?");
+        final save = await _askYesNo(null);
+
+        if (save == true) {
+          final routine = Routine(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            name: routineName,
+            intervals: intervals,
+          );
+
+          await RoutineStorage.instance.saveRoutine(routine);
+          await VoiceTtsService.instance.speak(
+              "Saved routine $routineName.");
+        }
+
+        // 3. Ask to start
+        await VoiceTtsService.instance.speak(
+            "Should I start this routine now?");
+        final start = await _askYesNo(null);
+
+        if (start == true) {
+          TimerManager.instance.startTimer(routineName, intervals);
+          await VoiceTtsService.instance.speak(
+              "Starting routine $routineName.");
+        }
+
+        return;
+    // ---------------------------------------------------------
+    // RENAME ROUTINE
+    // ---------------------------------------------------------
+      case "rename_routine":
+        final oldName = cmd.oldName?.toLowerCase().trim();
+        final newName = cmd.newName?.trim();
+
+        if (oldName == null || oldName.isEmpty || newName == null || newName.isEmpty) {
+          await VoiceTtsService.instance.speak(
+            "I need both the old name and the new name to rename a routine.",
+          );
+          return;
+        }
+
+        final routines = await RoutineStorage.instance.loadRoutines();
+
+        Routine? match;
+        for (final r in routines) {
+          final n = r.name.toLowerCase();
+          if (n == oldName || n.contains(oldName)) {
+            match = r;
+            break;
+          }
+        }
+
+        if (match == null) {
+          await VoiceTtsService.instance.speak("I couldn't find a routine called $oldName.");
+          return;
+        }
+
+        // Update name
+        final updated = Routine(
+          id: match.id,
+          name: newName,
+          intervals: match.intervals,
+        );
+
+        await RoutineStorage.instance.updateRoutine(updated);
+
+        await VoiceTtsService.instance.speak(
+          "Okay, I renamed $oldName to $newName.",
+        );
+
+        return;
 
       default:
         await VoiceTtsService.instance.speak(
           "Sorry, I cannot handle that yet.",
         );
+        return;
     }
   }
 
@@ -606,28 +846,9 @@ class VoiceRouter {
     String t = raw.toLowerCase();
 
     final remove = [
-      "start",
-      "timer",
-      "countdown",
-      "for",
-      "a",
-      "an",
-      "the",
-      "please",
-      "i want",
-      "i would like",
-      "seconds",
-      "second",
-      "minutes",
-      "minute",
-      "hours",
-      "hour",
-      "set",
-      "sets",
-      "round",
-      "rounds",
-      "work",
-      "rest",
+      "start", "timer", "countdown", "for", "a", "an", "the", "please",
+      "i want", "i would like", "seconds", "second", "minutes", "minute",
+      "hours", "hour", "set", "sets", "round", "rounds", "work", "rest",
     ];
 
     for (final w in remove) {
@@ -638,8 +859,7 @@ class VoiceRouter {
 
     if (t.isEmpty) return "";
 
-    return t
-        .split(" ")
+    return t.split(" ")
         .where((w) => w.isNotEmpty)
         .map((w) => w[0].toUpperCase() + w.substring(1))
         .join(" ");
