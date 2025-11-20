@@ -422,34 +422,15 @@ class VoiceRouter {
         final sec = cmd.seconds ?? 0;
         final label = cmd.label ?? "Timer";
 
+        // Speak summary
         await VoiceTtsService.instance.speak(
-            "$label for ${_spokenDuration(sec)}.");
+            "$label for ${_spokenDuration(sec)}. Starting now.");
 
-        await VoiceTtsService.instance.speak(
-            "Would you like to save this timer as a routine?");
-
-        final save = await _askYesNo(null);
-
-        if (save == true) {
-          final routine = Routine(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            name: label,
-            intervals: [TimerInterval(name: label, seconds: sec)],
-          );
-          await RoutineStorage.instance.saveRoutine(routine);
-          await VoiceTtsService.instance.speak("Saved to routines.");
-        }
-
-        await VoiceTtsService.instance.speak("Should I start it now?");
-        final startNow = await _askYesNo(null);
-
-        if (startNow == true) {
-          TimerManager.instance.startTimer(
-            label,
-            [TimerInterval(name: label, seconds: sec)],
-          );
-          await VoiceTtsService.instance.speak("Starting $label.");
-        }
+        // Immediately start without asking to save
+        TimerManager.instance.startTimer(
+          label,
+          [TimerInterval(name: label, seconds: sec)],
+        );
 
         return;
 
