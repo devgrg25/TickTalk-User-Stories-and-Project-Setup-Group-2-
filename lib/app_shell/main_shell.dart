@@ -82,6 +82,7 @@ class _MainShellState extends State<MainShell> {
           MaterialPageRoute(builder: (_) => page),
         );
       },
+      stopwatchController: sharedNormalSW, // 🔥 REQUIRED PARAMETER
     );
 
     if (widget.startTutorial) {
