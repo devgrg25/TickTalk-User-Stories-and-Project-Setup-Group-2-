@@ -1,15 +1,24 @@
 class AiCommand {
   final String type;
-  final int? seconds;        // simple timer
+
+  // For simple timers
+  final int? seconds;
   final String? label;
 
-  // interval timers
+  // For interval timers
   final int? workSeconds;
   final int? restSeconds;
   final int? rounds;
 
-  // routines
+  // For routines
   final String? routineName;
+
+  // For navigation
+  final String? target;
+
+  // For rename routine
+  final String? oldName;
+  final String? newName;
 
   AiCommand({
     required this.type,
@@ -19,6 +28,9 @@ class AiCommand {
     this.restSeconds,
     this.rounds,
     this.routineName,
+    this.target,
+    this.oldName,
+    this.newName,
   });
 
   factory AiCommand.fromJson(Map<String, dynamic> json) {
@@ -30,6 +42,9 @@ class AiCommand {
       restSeconds: json["restSeconds"],
       rounds: json["rounds"],
       routineName: json["routineName"],
+      target: json["target"],
+      oldName: json["oldName"],
+      newName: json["newName"],
     );
   }
 }
