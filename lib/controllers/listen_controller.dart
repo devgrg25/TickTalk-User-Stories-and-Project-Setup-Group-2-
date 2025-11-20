@@ -4,19 +4,17 @@ import 'mic_controller.dart';
 import '../timer_models/timer_model.dart';
 import '../routines/routines_page.dart';
 import 'tutorial_controller.dart';
-import '../utils/fuzzy_timer_match.dart';
 
 class ListenController {
   final VoiceController voice;
   final GlobalKey<RoutinesPageState> routinesKey;
 
-  // state accessors
   final bool Function() getIsListening;
   final void Function(bool) setIsListening;
 
   final TutorialController tutorialController;
 
-  final TimerData? Function() getActiveTimer; // currently unused but kept for future
+  final TimerData? Function() getActiveTimer;
   final int Function() getTabIndex;
 
   final void Function(TimerData timer) pauseTimer;
@@ -55,54 +53,49 @@ class ListenController {
     required this.setState,
   });
 
-  // ------------------ MAIN LISTENER ENTRY ------------------
+  // ---------------- MAIN LISTENER ENTRY ----------------
   Future<void> startListening() async {
-    // Stop any ongoing TTS
     await stopPageTts();
 
     if (getIsListening()) return;
     setState(() => setIsListening(true));
 
-    // ---------- CASE 0: Tutorial ----------
     if (tutorialController.isActive) {
       await _handleTutorialCase();
       return;
     }
 
-    // ---------- Unified FLOW: control timers + create timers ----------
     await voice.startListeningForControl(
       onCommand: (cmd) async {
         final lower = cmd.toLowerCase().trim();
+        debugPrint(lower);
 
-        // 1) Try to handle as a TIMER CONTROL (pause/resume/stop/restart/start BY NAME)
         final handledControl = await _tryHandleTimerControl(lower);
         if (handledControl) {
           if (mounted()) setState(() => setIsListening(false));
           return;
         }
 
-        // 2) Not a (valid) control command → try to interpret as CREATE TIMER
         final created = await _handleCreateTimerFromRaw(lower);
         if (created) {
           if (mounted()) setState(() => setIsListening(false));
           return;
         }
 
-        // 3) If still not handled and we are on Routines tab → pass to routines
         if (getTabIndex() == 2) {
           routinesKey.currentState?.handleVoiceCommand(lower);
           if (mounted()) setState(() => setIsListening(false));
           return;
         }
 
-        // 4) Fallback: nothing matched
-        await voice.speak("Sorry, I didn't understand that.");
+        await Future.delayed(const Duration(milliseconds: 200));
+        await voice.speakQueued("Sorry, I didn't understand that.");
         if (mounted()) setState(() => setIsListening(false));
       },
     );
   }
 
-  // ------------------ CASE 0: Tutorial ------------------
+  // ---------------- TUTORIAL CASE ----------------
   Future<void> _handleTutorialCase() async {
     await voice.startListeningRaw(
       onCommand: (String heard) async {
@@ -120,162 +113,200 @@ class ListenController {
     );
   }
 
-  // ------------------ TIMER CONTROL BY NAME ------------------
-  /// Returns true if the phrase was handled as a control command
-  Future<bool> _tryHandleTimerControl(String spoken) async {
-    final controlWords = <String>[
-      "pause",
-      "resume",
-      "continue",
-      "stop",
-      "end",
-      "cancel",
-      "start",
-      "begin",
-      "restart",
-      "start again",
-      "reset",
-    ];
+  // ---------------- NUMBER-WORD CONVERSION ----------------
+  String convertNumberWords(String text) {
+    final map = {
+      "zero": "0",
+      "one": "1",
+      "two": "2",
+      "three": "3",
+      "four": "4",
+      "five": "5",
+      "six": "6",
+      "seven": "7",
+      "eight": "8",
+      "nine": "9",
+      "ten": "10",
+      "first": "1",
+      "second": "2",
+      "third": "3",
+      "fourth": "4",
+    };
 
-    final isControl = controlWords.any((w) => spoken.contains(w));
-    if (!isControl) return false; // Not a control phrase at all
+    var result = text;
+    map.forEach((word, digit) {
+      result = result.replaceAll(RegExp("\\b$word\\b"), digit);
+    });
 
-    final timers = getTimers();
-    if (timers.isEmpty) {
-      await voice.speak("You don't have any timers yet.");
-      return true;
-    }
+    return result;
+  }
 
-    // Strip common action words & filler to get the timer name candidate
-    String extracted = spoken.replaceAll(
+  // ---------------- SMART NAME EXTRACTION ----------------
+  String extractName(String spoken, List<TimerData> timers) {
+    // Remove action words first
+    String cleaned = spoken.replaceAll(
       RegExp(
-        r"(pause|resume|continue|stop|end|cancel|start again|start|restart|begin|timer|the|my|a)",
+        r"\b(pause|resume|continue|stop|end|cancel|restart|start again|start|begin|timer|please|the|my|a|number|to)\b",
       ),
       "",
-    ).trim();
+    );
+
+    cleaned = cleaned.trim();
+
+    // Convert number words to digits
+    cleaned = convertNumberWords(cleaned);
+
+    // Split into words
+    final words = cleaned.split(" ");
+
+    // Try to isolate meaningful keywords:
+    // - number: "1", "2"
+    // - match words that appear inside timer names
+    final timerNames = timers.map((t) => t.name.toLowerCase()).toList();
+
+    // Try each word individually
+    for (final w in words) {
+      if (w.isEmpty) continue;
+
+      // If timer name contains this word, return it
+      for (final tName in timerNames) {
+        if (tName.contains(w)) return w;
+      }
+    }
+
+    // If nothing matched: fall back to full cleaned text
+    return cleaned;
+  }
+
+  // ---------------- TIMER CONTROL (NAME-ONLY, SMART EXTRACTION) ----------------
+  Future<bool> _tryHandleTimerControl(String spoken) async {
+    final timers = getTimers();
+    if (timers.isEmpty) {
+      await voice.speakQueued("You don't have any timers yet.");
+      return true;
+    }
+
+    // Detect action
+    final lc = spoken.toLowerCase().trim();
+
+    final wantsPause   = lc.contains("pause") || lc.contains("freeze");
+    final wantsResume  = lc.contains("resume") || lc.contains("continue");
+    final wantsStop    = lc.contains("stop") || lc.contains("end") || lc.contains("cancel");
+    final wantsRestart = lc.contains("restart") || lc.contains("start again") || lc.contains("reset");
+    final wantsStart   = lc.contains("start") || lc.contains("begin");
+
+    final isControl = wantsPause || wantsResume || wantsStop || wantsRestart || wantsStart;
+    if (!isControl) return false;
+
+    // ⭐ SMART NAME-EXTRACTION
+    final extracted = extractName(lc, timers);
 
     if (extracted.isEmpty) {
-      await voice.speak("Please say the timer name.");
+      await voice.speakQueued("Please say the timer name.");
       return true;
     }
 
-    // Fuzzy match timer name
-    final matches = FuzzyTimerMatcher.matchTimers(extracted, timers);
-
-    if (matches.isEmpty) {
-      await voice.speak("I couldn't find any timer named $extracted.");
-      return true; // we handled by giving feedback
-    }
-
-    // Ambiguous between top 2 matches
-    if (matches.length > 1 &&
-        (matches.first.score - matches[1].score) < 0.15) {
-      final names = matches.take(2).map((m) => m.timer.name).join(" or ");
-      await voice.speak("Did you mean $names?");
-      return true;
-    }
-
-    final chosen = matches.first.timer;
-
-    // ----- Determine action -----
-    final bool wantsPause = spoken.contains("pause");
-    final bool wantsResume =
-        spoken.contains("resume") || spoken.contains("continue");
-    final bool wantsStop = spoken.contains("stop") ||
-        spoken.contains("end") ||
-        spoken.contains("cancel");
-    final bool wantsRestart = spoken.contains("restart") ||
-        spoken.contains("start again") ||
-        spoken.contains("reset");
-    final bool wantsStart =
-        spoken.contains("start") || spoken.contains("begin");
-
-    // Behavior C for "start": start if stopped, resume if paused, deny if running
-    if (wantsRestart) {
-      // restart = stop + resume (your _stopTimer resets to full duration)
-      stopTimer(chosen);
-      resumeTimer(chosen);
-      await voice.speak("Restarting ${chosen.name}.");
-      return true;
-    }
-
-    if (wantsPause) {
-      if (chosen.isRunning) {
-        pauseTimer(chosen);
-      } else {
-        await voice.speak("${chosen.name} is not running.");
+    // NAME MATCHING
+    TimerData? chosen;
+    for (final t in timers) {
+      final name = t.name.toLowerCase();
+      if (name.contains(extracted)) {
+        chosen = t;
+        break;
       }
+    }
+
+    if (chosen == null) {
+      await voice.speakQueued("I couldn't find any timer matching $extracted.");
       return true;
     }
 
-    if (wantsResume) {
-      if (!chosen.isRunning) {
-        resumeTimer(chosen);
-      } else {
-        await voice.speak("${chosen.name} is already running.");
-      }
-      return true;
-    }
+    // Execute action
+    await _executeTimerAction(
+      timer: chosen,
+      wantsPause: wantsPause,
+      wantsResume: wantsResume,
+      wantsStop: wantsStop,
+      wantsRestart: wantsRestart,
+      wantsStart: wantsStart,
+    );
 
-    if (wantsStop) {
-      if (chosen.isRunning) {
-        stopTimer(chosen);
-      } else {
-        // your stopTimer also resets + closes countdown etc; still ok
-        stopTimer(chosen);
-      }
-      return true;
-    }
-
-    if (wantsStart) {
-      // C: start if stopped, resume if paused, deny if already running
-      if (!chosen.isRunning) {
-        // From your model, resumeTimer will create a ticker from current totalTime
-        resumeTimer(chosen);
-      } else {
-        await voice.speak("${chosen.name} is already running.");
-      }
-      return true;
-    }
-
-    // If somehow we got here (some weird control word), treat as handled
     return true;
   }
 
-  // ------------------ CREATE TIMER FROM RAW SPEECH ------------------
-  /// Tries to interpret [spoken] as a "create timer" command.
-  /// Returns true if a timer was created / screen was navigated.
-  Future<bool> _handleCreateTimerFromRaw(String spoken) async {
-    // Use your existing parser
-    final parsed = await voice.interpretCommand(spoken);
-
-    // Completely unrecognized pattern
-    if (parsed == null) {
-      return false; // let caller decide fallback
+  // ---------------- EXECUTE ACTION ----------------
+  Future<void> _executeTimerAction({
+    required TimerData timer,
+    required bool wantsPause,
+    required bool wantsResume,
+    required bool wantsStop,
+    required bool wantsRestart,
+    required bool wantsStart,
+  }) async {
+    if (wantsRestart) {
+      stopTimer(timer);
+      resumeTimer(timer);
+      await voice.speakQueued("Restarting ${timer.name}.");
+      return;
     }
 
-    // "Incomplete" case: user just said "timer" or similar
-    final bool allNull = (parsed.workMinutes == null &&
+    if (wantsPause) {
+      if (timer.isRunning) {
+        pauseTimer(timer);
+      } else {
+        await voice.speakQueued("${timer.name} is not running.");
+      }
+      return;
+    }
+
+    if (wantsResume) {
+      if (!timer.isRunning) {
+        resumeTimer(timer);
+      } else {
+        await voice.speakQueued("${timer.name} is already running.");
+      }
+      return;
+    }
+
+    if (wantsStop) {
+      stopTimer(timer);
+      await voice.speakQueued("Stopped ${timer.name}.");
+      return;
+    }
+
+    if (wantsStart) {
+      if (!timer.isRunning) {
+        resumeTimer(timer);
+        await voice.speakQueued("Starting ${timer.name}.");
+      } else {
+        await voice.speakQueued("${timer.name} is already running.");
+      }
+      return;
+    }
+  }
+
+  // ---------------- CREATE TIMER ----------------
+  Future<bool> _handleCreateTimerFromRaw(String spoken) async {
+    final parsed = await voice.interpretCommand(spoken);
+
+    if (parsed == null) return false;
+
+    final allNull = parsed.workMinutes == null &&
         parsed.breakMinutes == null &&
         parsed.sets == null &&
-        parsed.simpleTimerMinutes == null);
+        parsed.simpleTimerMinutes == null;
 
     if (allNull) {
-      await voice.speak(
-        "Please tell me the timer length. For example, say 'start a 5 minute timer'.",
-      );
+      await voice.speakQueued("Please tell me the timer length.");
       return true;
     }
 
-    // We have enough info to build a timer
     final work = parsed.workMinutes ?? parsed.simpleTimerMinutes ?? 0;
     final sets = parsed.sets ?? 1;
     final breaks = parsed.breakMinutes ?? 0;
 
     if (work <= 0 || sets <= 0) {
-      await voice.speak(
-        "I couldn't figure out the timer duration. Please try again with a clear time.",
-      );
+      await voice.speakQueued("I couldn't understand the duration.");
       return true;
     }
 
@@ -298,13 +329,13 @@ class ListenController {
     setState(() {
       setEditingTimer(null);
       setVoiceFilledTimer(timerData);
-      setTabIndex(1); // jump to CreateTimerScreen with pre-filled data
+      setTabIndex(1);
     });
 
     return true;
   }
 
-  // ------------------ STOP LISTENING ------------------
+  // ---------------- STOP LISTENING ----------------
   Future<void> stopListening() async {
     if (!getIsListening()) return;
 

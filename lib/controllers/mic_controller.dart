@@ -55,6 +55,26 @@ class VoiceController {
     }
   }
 
+  Future<void> speakQueued(String text) async {
+    // Stop anything playing
+    await _tts.stop();
+    // Wait a tiny bit to ensure stop is processed
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // Speak
+    await _tts.speak(text);
+
+    // Wait until TTS finishes before returning
+    bool speaking = true;
+    _tts.setCompletionHandler(() {
+      speaking = false;
+    });
+
+    while (speaking) {
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+  }
+
   /// Speak any given text aloud using TTS
   Future<void> speak(String text) async {
     if (!_ttsReady) {

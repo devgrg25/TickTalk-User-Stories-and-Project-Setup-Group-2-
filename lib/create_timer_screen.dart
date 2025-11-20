@@ -109,6 +109,7 @@ class _CreateTimerScreenState extends State<CreateTimerScreen> {
         : "You created a timer named $name for $work minutes. Should I start?";
 
     await _tts.stop();
+    await Future.delayed(const Duration(milliseconds: 300));
     await _tts.speak(confirmationText);
 
     // Start listening for yes/no answer
