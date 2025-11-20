@@ -3,13 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_shell/main_shell.dart';
 
-// NEW: Import stopwatch pages
-import 'package:ticktalk_app/UI/stopwatch/stopwatch_selector_page.dart';
-import 'package:ticktalk_app/UI/stopwatch/normal_stopwatch_page.dart';
-
-// NEW: Welcome page
-import 'UI/welcome_page/welcome_page.dart';
-
 final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 
 void main() {
@@ -27,15 +20,7 @@ class TickTalkApp extends StatelessWidget {
       title: "TickTalk",
       theme: ThemeData.dark(),
       navigatorObservers: [routeObserver],
-
-      // ✅ Stopwatch routes stay the same
-      routes: {
-        "/stopwatch": (context) => const StopwatchSelectorPage(),
-        "/normalStopwatch": (context) => const NormalStopwatchPage(),
-      },
-
-      // ✅ Decide whether to show WelcomePage or MainShell
-      home: const _StartupWrapper(),
+      home: const MainShell(),
     );
   }
 }
