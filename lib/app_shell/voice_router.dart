@@ -1,5 +1,5 @@
 // -------------------------------------------------------------
-// VOICE ROUTER – UPDATED VERSION (LIST + PREVIEW + DELETE + RENAME)
+// VOICE ROUTER – UPDATED VERSION (LOCAL TIMER CREATION REMOVED)
 // -------------------------------------------------------------
 
 import 'dart:async';
@@ -49,14 +49,14 @@ class VoiceRouter {
     // Continue routine builder
     if (_isBuildingRoutine) return _handleRoutineBuilder(input);
 
-    // Start local routine builder (ONLY for create flow)
+    // Start local routine builder
     if (_detectRoutineStart(input)) return _startRoutineBuilder();
 
-    // Local timer controls
+    // Local timer controls (pause/resume/stop ONLY)
     if (await _handleLocalTimerControls(input)) return;
 
-    // Local quick timers
-    if (await _handleLocalQuickTimer(raw, input)) return;
+    // ⛔ REMOVED: Local quick timer creation logic
+    // (Previously: if (_handleLocalQuickTimer) return;)
 
     // Navigation
     if (await _handleNavigation(input)) return;
@@ -74,10 +74,8 @@ class VoiceRouter {
   }
 
   // -------------------------------------------------------------
-  // ROUTINE BUILDER (LOCAL)
+  // ROUTINE BUILDER (NO CHANGE)
   // -------------------------------------------------------------
-
-  // Only trigger local flow when user wants to *create* a new routine
   bool _detectRoutineStart(String input) {
     return input.contains("create routine") ||
         input.contains("build routine") ||
@@ -188,7 +186,7 @@ class VoiceRouter {
   }
 
   // -------------------------------------------------------------
-  // LOCAL TIMER CONTROLS
+  // LOCAL TIMER CONTROLS (PAUSE/RESUME/STOP ONLY)
   // -------------------------------------------------------------
   ActiveTimer? _findTimerByName(String query) {
     final timers = TimerManager.instance.timers;
@@ -264,36 +262,11 @@ class VoiceRouter {
     return false;
   }
 
-
   // -------------------------------------------------------------
-  // LOCAL QUICK TIMERS
-  // -------------------------------------------------------------
-  Future<bool> _handleLocalQuickTimer(String raw, String input) async {
-    final hasKeyword =
-        input.contains("timer") || input.contains("start") || input.contains("countdown");
-
-    if (!hasKeyword) return false;
-
-    final duration = _extractDuration(input);
-    if (duration == null) return false;
-
-    final label = _cleanLabel(input).isEmpty ? "Timer" : _cleanLabel(input);
-
-    TimerManager.instance
-        .startTimer(label, [TimerInterval(name: label, seconds: duration)]);
-
-    await VoiceTtsService.instance
-        .speak("Starting $label for ${_spokenDuration(duration)}.");
-
-    return true;
-  }
-
-  // -------------------------------------------------------------
-  // BACKEND COMMAND EXECUTION
+  // BACKEND COMMAND EXECUTION (UNCHANGED)
   // -------------------------------------------------------------
   Future<void> _executeAi(AiCommand cmd) async {
     switch (cmd.type) {
-    // ---------------------------------------------------------
       case "start_timer":
         final sec = cmd.seconds ?? 0;
         final label = cmd.label ?? "Timer";
@@ -304,7 +277,6 @@ class VoiceRouter {
             .speak("Starting $label for ${_spokenDuration(sec)}.");
         break;
 
-    // ---------------------------------------------------------
       case "start_interval_timer":
         final label2 = cmd.label ?? "Interval";
         final w = cmd.workSeconds ?? 60;
@@ -346,7 +318,6 @@ class VoiceRouter {
 
         break;
 
-    // ---------------------------------------------------------
       case "pause_timer":
         final active1 = TimerManager.instance.timers.isNotEmpty
             ? TimerManager.instance.timers.last
@@ -373,8 +344,6 @@ class VoiceRouter {
         await VoiceTtsService.instance.speak("Timer stopped.");
         break;
 
-    // ---------------------------------------------------------
-    // START ROUTINE
       case "start_routine":
         final qStart = cmd.routineName?.trim().toLowerCase();
         if (qStart == null || qStart.isEmpty) {
@@ -401,8 +370,6 @@ class VoiceRouter {
             .speak("Starting routine ${found.name}.");
         break;
 
-    // ---------------------------------------------------------
-    // LIST ROUTINES
       case "list_routines":
         final routines = await RoutineStorage.instance.loadRoutines();
         if (routines.isEmpty) {
@@ -414,8 +381,6 @@ class VoiceRouter {
         await VoiceTtsService.instance.speak("Your routines are: $names.");
         break;
 
-    // ---------------------------------------------------------
-    // PREVIEW ROUTINE
       case "preview_routine":
         final qPrev = cmd.routineName?.trim().toLowerCase();
         if (qPrev == null || qPrev.isEmpty) {
@@ -452,8 +417,6 @@ class VoiceRouter {
             .speak("Steps in ${foundP.name}: ${buf.toString()}");
         break;
 
-    // ---------------------------------------------------------
-    // DELETE ROUTINE
       case "delete_routine":
         final qDel = cmd.routineName?.trim().toLowerCase();
         if (qDel == null || qDel.isEmpty) {
@@ -483,8 +446,6 @@ class VoiceRouter {
             .speak("Deleted routine ${foundD.name}.");
         break;
 
-    // ---------------------------------------------------------
-    // RENAME ROUTINE
       case "rename_routine":
         final oldName = cmd.oldName?.trim().toLowerCase();
         final newName = cmd.newName?.trim();
@@ -522,8 +483,6 @@ class VoiceRouter {
             .speak("Renamed ${foundR.name} to $newName.");
         break;
 
-    // ---------------------------------------------------------
-    // EDIT ROUTINE (summary only)
       case "edit_routine":
         final qEdit = cmd.routineName?.trim().toLowerCase();
         if (qEdit == null || qEdit.isEmpty) {
@@ -567,7 +526,6 @@ class VoiceRouter {
             .speak("Editing is coming soon. What else would you like?");
         break;
 
-    // ---------------------------------------------------------
       default:
         await VoiceTtsService.instance.speak(
           "Sorry, I cannot handle that yet.",
@@ -576,7 +534,7 @@ class VoiceRouter {
   }
 
   // -------------------------------------------------------------
-  // NAVIGATION (ONLY navigation, no routine-builder here)
+  // NAVIGATION (UNCHANGED)
   // -------------------------------------------------------------
   Future<bool> _handleNavigation(String input) async {
     if (input.contains("home")) {
@@ -584,7 +542,7 @@ class VoiceRouter {
       await VoiceTtsService.instance.speak("Opening home.");
       return true;
     }
-    if (input.contains("timer")) {
+    if (input.contains("go to timer")) {
       onNavigateTab(1);
       await VoiceTtsService.instance.speak("Opening timer.");
       return true;
@@ -605,7 +563,7 @@ class VoiceRouter {
   }
 
   // -------------------------------------------------------------
-  // ASK HELPERS
+  // ASK HELPERS (UNCHANGED)
   // -------------------------------------------------------------
   Future<bool?> _askYesNo(String? prompt) async {
     if (prompt != null) {
@@ -642,7 +600,7 @@ class VoiceRouter {
   }
 
   // -------------------------------------------------------------
-  // TEXT HELPERS
+  // TEXT HELPERS (UNCHANGED)
   // -------------------------------------------------------------
   String _cleanLabel(String raw) {
     String t = raw.toLowerCase();
