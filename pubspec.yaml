@@ -21,7 +21,7 @@ dependencies:
   connectivity_plus: ^6.0.3
 
   # Voice (Google Speech & Text-to-Speech)
-  speech_to_text: ^8.0.0
+  speech_to_text: ^7.3.0
   flutter_tts: ^3.8.5
 
 dev_dependencies:
