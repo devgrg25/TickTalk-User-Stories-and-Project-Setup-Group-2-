@@ -15,10 +15,23 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+
 subprojects {
     project.evaluationDependsOn(":app")
 }
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
+}
+
+/* ---------------------------------------------------------
+   FIX FOR speech_to_text (and any plugin missing compileSdk)
+   --------------------------------------------------------- */
+subprojects {
+    afterEvaluate {
+        extensions.findByType<com.android.build.gradle.BaseExtension>()?.apply {
+            compileSdkVersion(34)
+            defaultConfig.targetSdk = 34
+        }
+    }
 }
