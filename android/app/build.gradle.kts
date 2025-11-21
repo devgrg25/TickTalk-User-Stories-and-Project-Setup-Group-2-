@@ -36,14 +36,3 @@ android {
 flutter {
     source = "../.."
 }
-
-// --- FIX PLUGIN COMPILE SDK ---
-subprojects {
-    afterEvaluate { subproject ->
-        val android = subproject.extensions.findByName("android")
-        if (android is com.android.build.gradle.BaseExtension) {
-            android.compileSdkVersion(34)
-            android.defaultConfig.targetSdk = 34
-        }
-    }
-}
