@@ -39,11 +39,11 @@ flutter {
 
 // --- FIX PLUGIN COMPILE SDK ---
 subprojects {
-    afterEvaluate {
-        val androidExt = this.extensions.findByName("android")
-        if (androidExt is com.android.build.gradle.BaseExtension) {
-            androidExt.compileSdkVersion(34)
-            androidExt.defaultConfig.targetSdk = 34
+    afterEvaluate { subproject ->
+        val android = subproject.extensions.findByName("android")
+        if (android is com.android.build.gradle.BaseExtension) {
+            android.compileSdkVersion(34)
+            android.defaultConfig.targetSdk = 34
         }
     }
 }
