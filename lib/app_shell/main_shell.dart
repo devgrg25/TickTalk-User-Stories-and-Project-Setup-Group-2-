@@ -21,6 +21,10 @@ import '../logic/tutorial/tutorial_controller.dart';
 import 'voice_mic_bar.dart';
 import 'voice_router.dart';
 
+import '../UI/settings/font_scale.dart';
+import '../logic/voice/voice_tts_service.dart';
+
+
 class MainShell extends StatefulWidget {
   final bool startTutorial;
 
@@ -166,6 +170,23 @@ class _MainShellState extends State<MainShell> {
           if (wantsTutorial) {
             setState(() => _index = 0);
             _tutorial.start();
+            return;
+          }
+
+          // 🔹 Voice-based font scale
+          if (lower.contains('increase font') ||
+              lower.contains('bigger text') ||
+              lower.contains('larger text')) {
+            await FontScale.instance.increaseBy10();
+            await VoiceTtsService.instance.speak('Increasing font size.');
+            return;
+          }
+
+          if (lower.contains('decrease font') ||
+              lower.contains('smaller text') ||
+              lower.contains('reduce font')) {
+            await FontScale.instance.decreaseBy10();
+            await VoiceTtsService.instance.speak('Decreasing font size.');
             return;
           }
 

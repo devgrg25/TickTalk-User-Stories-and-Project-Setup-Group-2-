@@ -7,7 +7,7 @@ import 'font_scale.dart';
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
-  // Resets the tutorial flag to rerun on next app start
+  // ------- Tutorial helpers -------
   Future<void> _rerunTutorial(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hasSeenWelcome', false);
@@ -22,144 +22,119 @@ class SettingsPage extends StatelessWidget {
     }
   }
 
-  // Immediately navigates to the Welcome page
   Future<void> _goToWelcomeScreen(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hasSeenWelcome', false);
 
-    if (context.mounted) {
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const WelcomePage()),
-            (route) => false,
-      );
-    }
+    if (!context.mounted) return;
+
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const WelcomePage()),
+          (route) => false,
+    );
   }
 
-  // Helpers for +/- 10%
-  Future<void> _increaseBy10() async {
-    final current = FontScale.instance.scale;
-    await FontScale.instance.setScale(current + 0.10);
+  // ------- Font helpers -------
+  Future<void> _increaseFont() async {
+    await FontScale.instance.increaseBy10();
   }
 
-  Future<void> _decreaseBy10() async {
-    final current = FontScale.instance.scale;
-    await FontScale.instance.setScale(current - 0.10);
+  Future<void> _decreaseFont() async {
+    await FontScale.instance.decreaseBy10();
+  }
+
+  Future<void> _resetFont() async {
+    await FontScale.instance.setScale(1.0);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
-
-      // Rebuild when font scale changes
+      appBar: AppBar(title: const Text('Settings')),
       body: AnimatedBuilder(
         animation: FontScale.instance,
         builder: (context, _) {
-          final scale = FontScale.instance.scale;
-          final percent = (scale * 100).toStringAsFixed(0);
+          final percent = (FontScale.instance.scale * 100).toStringAsFixed(0);
 
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
-              // ---------- TEXT SIZE CARD ----------
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Text Size',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Current: $percent% (applies across the app)',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Slider
-                      Slider(
-                        min: 0.8,
-                        max: 1.6,
-                        divisions: 8,
-                        value: scale.clamp(0.8, 1.6),
-                        label: '$percent%',
-                        onChanged: (value) {
-                          FontScale.instance.setScale(value);
-                        },
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      // Buttons row
-                      Row(
-                        children: [
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: _increaseBy10,
-                              icon: const Icon(Icons.text_increase),
-                              label: const Text('Bigger (+10%)'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: _decreaseBy10,
-                              icon: const Icon(Icons.text_decrease),
-                              label: const Text('Smaller (−10%)'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            tooltip: 'Reset to 100%',
-                            onPressed: () => FontScale.instance.setScale(1.0),
-                            icon: const Icon(Icons.refresh),
-                          ),
-                        ],
-                      ),
-                    ],
+              // ---------- Text Size ----------
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Text(
+                  'Text Size',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white70,
                   ),
                 ),
               ),
-
-              const SizedBox(height: 24),
-
-              // ---------- TUTORIAL SECTION ----------
-              const Text(
-                'Tutorial',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+              ListTile(
+                leading: const Icon(Icons.text_fields),
+                title: const Text('Current size'),
+                subtitle: Text('$percent% (applies across the app)'),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _decreaseFont,
+                        icon: const Icon(Icons.remove),
+                        label: const Text('Smaller (-10%)'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _increaseFont,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Larger (+10%)'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _resetFont,
+                        child: const Text('Reset (100%)'),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
+
+              const Divider(height: 32),
+
+              // ---------- Tutorial ----------
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 4, 16, 4),
+                child: Text(
+                  'Tutorial',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white70,
+                  ),
+                ),
+              ),
               ListTile(
-                title: const Text('Rerun Tutorial on Next Start'),
-                subtitle: const Text('See the introductory guide again next time.'),
                 leading: const Icon(Icons.replay),
+                title: const Text('Rerun Tutorial on Next Start'),
+                subtitle:
+                const Text('See the introductory guide again next time.'),
                 onTap: () => _rerunTutorial(context),
               ),
               ListTile(
+                leading: const Icon(Icons.play_circle_fill),
                 title: const Text('Go to Welcome Screen Now'),
                 subtitle:
                 const Text('Return immediately to the welcome/tutorial.'),
-                leading: const Icon(Icons.play_circle_fill),
                 onTap: () => _goToWelcomeScreen(context),
               ),
+              const SizedBox(height: 12),
             ],
           );
         },
