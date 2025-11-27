@@ -22,6 +22,44 @@ Framework: Flutter
 Language: Dart  
 IDE: Android Studio  
 
+# Architecture Overview
+TickTalk uses a Layered Architecture with feature-based modules, ensuring clean separation between UI, business logic, and external services.
+
+UI Layer: Flutter screens, widgets, navigation
+
+Logic Layer: Timer logic, stopwatch logic, routines, voice routing
+
+Infrastructure Layer: Google STT, Gemini 2.0 LLM, FastAPI backend
+
+# Cloud Infrastructure
+The app is cloud-connected through a 3-tier setup:
+
+Flutter App: Captures commands, provides TTS & haptics
+
+FastAPI Backend: Handles AI logic and routes commands
+
+Google Cloud Services: STT + Gemini 2.0 interpretation
+
+# CI/CD Pipeline
+Every push to main triggers:
+
+Flutter dependency installation
+
+Release APK build (per ABI)
+
+Automatic upload to GitHub Releases
+
+You can download the latest APKs directly from the Releases tab.
+
+# Roadmap
+Deploy backend to Cloud Run
+
+Add user accounts & cloud syncing
+
+Add offline STT fallback
+
+Expand voice capabilities
+
 # Prerequisites
 
 Flutter SDK installed on your machine  
