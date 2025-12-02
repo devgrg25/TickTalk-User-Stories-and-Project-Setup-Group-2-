@@ -1,0 +1,42 @@
+on:
+  push:
+    branches:
+      - main   # or your default branch
+
+name: CI/CD - Build and Release APK
+
+jobs:
+  build:
+    name: Build and Release new APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Java
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Accept Android licenses
+        run: yes | flutter doctor --android-licenses
+
+      - name: Build Release APK
+        run: flutter build apk --release --split-per-abi
+
+      - name: Upload APK to GitHub Releases
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "build/app/outputs/apk/release/*.apk"
+          tag: v${{ github.run_number }}    # Auto versioning: v1, v2, v3...
+          token: ${{ secrets.GITHUB_TOKEN }}
