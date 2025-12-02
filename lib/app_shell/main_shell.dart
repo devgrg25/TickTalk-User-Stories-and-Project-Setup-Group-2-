@@ -13,10 +13,12 @@ import '../UI/stopwatch/normal_stopwatch_page.dart';
 import '../UI/stopwatch/stopwatch_summary_page.dart';
 import '../UI/stopwatch/player_count_selector_page.dart';
 import '../UI/stopwatch/player_mode_stopwatch_page.dart';
+import '../UI/stopwatch/multi_player_summary_page.dart';    // ⭐️ ADD THIS IMPORT
 
 // Logic
 import '../logic/stopwatch/normal_stopwatch_shared_controller.dart';
 import '../logic/tutorial/tutorial_controller.dart';
+import '../logic/stopwatch/player_mode_manager.dart';       // ⭐️ PLAYER MANAGER IMPORT
 
 import 'voice_mic_bar.dart';
 import 'voice_router.dart';
@@ -47,32 +49,60 @@ class _MainShellState extends State<MainShell> {
   late final VoiceRouter _voiceRouter;
   late final TutorialController _tutorial;
 
-  // Stopwatch shared controller
+  // Normal stopwatch shared controller
   final NormalStopwatchSharedController sharedSW = NormalStopwatchSharedController();
 
-  // Summary variables
+  // Summary variables for SINGLE STOPWATCH
   Duration? _summaryTotal;
   List<Duration>? _summaryLaps;
 
   // Player Mode
   int? _playerCount = 1;
 
+  // ⭐️ PLAYER MODE SUMMARY STORAGE
+  List<PlayerStopwatchSummary>? _playerSummaries;
+
+
   @override
   void initState() {
     super.initState();
 
+    // TICKER FOR NORMAL STOPWATCH
     sharedSW.onTick = () {
       if (mounted) setState(() {});
     };
 
+    // -----------------------------------------------------
+    // ⭐️ LISTEN TO PLAYER-MODE SUMMARY CALLBACK
+    // -----------------------------------------------------
+    PlayerModeManager.instance.onAllPlayersStopped = (summaries) {
+      setState(() {
+        _playerSummaries = summaries;
+        _index = 9; // navigate to MultiPlayerSummaryPage
+      });
+    };
+
+    // Voice Router
     _voiceRouter = VoiceRouter(
       onNavigateTab: (tab) {
         setState(() => _index = tab);
         if (tab == 2) routinesKey.currentState?.reload();
       },
       stopwatchController: sharedSW,
+
+      // NORMAL STOPWATCH SUMMARY
+      onShowSummary: (total, laps) {
+        setState(() {
+          _summaryTotal = total;
+          _summaryLaps = laps;
+          _voiceRouter.setSummary(total, laps);
+
+          _index = 6; // Show normal summary page
+        });
+      },
     );
 
+    // Tutorial Controller
     _tutorial = TutorialController(
       context: context,
       goToTab: (tab) {
@@ -84,6 +114,7 @@ class _MainShellState extends State<MainShell> {
       },
     );
 
+    // Start tutorial if needed
     if (widget.startTutorial) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _tutorial.start();
@@ -97,14 +128,11 @@ class _MainShellState extends State<MainShell> {
   }
 
   // ------------------------------------------------------------
-  // 🔥 ADVANCED MIC LOGIC WITH TUTORIAL INTEGRATION
+  // 🔥 ADVANCED MIC LOGIC (unchanged)
   // ------------------------------------------------------------
   Future<void> _toggleMic() async {
     if (!_isListening) {
-      // Pause tutorial while listening
-      if (_tutorial.isActive && !_tutorial.isPaused) {
-        _tutorial.pause();
-      }
+      if (_tutorial.isActive && !_tutorial.isPaused) _tutorial.pause();
 
       final available = await _speech.initialize(
         onStatus: (status) {
@@ -138,13 +166,13 @@ class _MainShellState extends State<MainShell> {
 
           final lower = _lastWords.toLowerCase().trim();
 
-          // Stop mic
+          // Stop mic state
           setState(() => _isListening = false);
           try {
             await _speech.stop();
           } catch (_) {}
 
-          // Tutorial skip commands
+          // Tutorial Cancel / Resume
           if (_tutorial.isActive) {
             bool skip = lower.contains('skip') ||
                 lower.contains('exit tutorial') ||
@@ -173,7 +201,7 @@ class _MainShellState extends State<MainShell> {
             return;
           }
 
-          // 🔹 Voice-based font scale
+          // Font controls
           if (lower.contains('increase font') ||
               lower.contains('bigger text') ||
               lower.contains('larger text')) {
@@ -190,7 +218,7 @@ class _MainShellState extends State<MainShell> {
             return;
           }
 
-          // Normal voice routing
+          // NORMAL VOICE ROUTING
           if (lower.isNotEmpty) _voiceRouter.handle(lower);
         },
       );
@@ -200,10 +228,7 @@ class _MainShellState extends State<MainShell> {
       try {
         await _speech.stop();
       } catch (_) {}
-
-      if (_tutorial.isActive && _tutorial.isPaused) {
-        _tutorial.resume();
-      }
+      if (_tutorial.isActive && _tutorial.isPaused) _tutorial.resume();
     }
   }
 
@@ -216,50 +241,48 @@ class _MainShellState extends State<MainShell> {
         child: CreateTimerPage(onTimerStarted: _returnHome),
       ),                                                // 1
       RoutinesPage(key: routinesKey),                   // 2
-
-      // Stopwatch selector
       StopwatchSelectorPage(
         onNavigate: (i) => setState(() => _index = i),
         controller: sharedSW,
         onStopFromPreview: (total, laps) {
           _summaryTotal = total;
           _summaryLaps = laps;
-          setState(() => _index = 6); // summary
+          setState(() => _index = 6);
         },
       ),                                                // 3
-
       const SettingsPage(),                             // 4
-
-      // Normal stopwatch
       NormalStopwatchPage(
         controller: sharedSW,
         onStop: (total, laps) {
           _summaryTotal = total;
           _summaryLaps = laps;
-          setState(() => _index = 6); // summary page
+          setState(() => _index = 6);
         },
       ),                                                // 5
-
-      // Summary page
       StopwatchSummaryPage(
         total: _summaryTotal,
         laps: _summaryLaps,
-        onClose: () => setState(() => _index = 3),
+        onClose: () {
+          _voiceRouter.clearSummary();
+          setState(() => _index = 3);
+        },
       ),                                                // 6
-
-      // Player count
       PlayerCountSelectorPage(
         onSelectPlayers: (count) {
           _playerCount = count;
           setState(() => _index = 8);
         },
       ),                                                // 7
-
-      // Player mode stopwatch
       PlayerModeStopwatchPage(
         playerCount: _playerCount ?? 1,
         onExit: () => setState(() => _index = 3),
       ),                                                // 8
+
+      // ⭐️ MULTI PLAYER SUMMARY PAGE ADDED AS INDEX 9
+      MultiPlayerSummaryPage(
+        summaries: _playerSummaries ?? [],
+        onClose: () => setState(() => _index = 3),
+      ),                                                // 9
     ];
 
     return Scaffold(
@@ -267,6 +290,7 @@ class _MainShellState extends State<MainShell> {
       body: SafeArea(
         child: Stack(
           children: [
+
             IndexedStack(index: _index, children: screens),
 
             if (_isListening && _lastWords.isNotEmpty)
@@ -302,13 +326,29 @@ class _MainShellState extends State<MainShell> {
               if (i == 2) routinesKey.currentState?.reload();
             },
             destinations: const [
-              NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: "Home"),
-              NavigationDestination(icon: Icon(Icons.timer_outlined), selectedIcon: Icon(Icons.timer), label: "Timer"),
-              NavigationDestination(icon: Icon(Icons.list_alt_outlined), selectedIcon: Icon(Icons.list_alt), label: "Routines"),
-              NavigationDestination(icon: Icon(Icons.timer), selectedIcon: Icon(Icons.timer_rounded), label: "Stopwatch"),
-              NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: "Settings"),
+              NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: "Home"),
+              NavigationDestination(
+                  icon: Icon(Icons.timer_outlined),
+                  selectedIcon: Icon(Icons.timer),
+                  label: "Timer"),
+              NavigationDestination(
+                  icon: Icon(Icons.list_alt_outlined),
+                  selectedIcon: Icon(Icons.list_alt),
+                  label: "Routines"),
+              NavigationDestination(
+                  icon: Icon(Icons.timer),
+                  selectedIcon: Icon(Icons.timer_rounded),
+                  label: "Stopwatch"),
+              NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: "Settings"),
             ],
           ),
+
           VoiceMicBar(isListening: _isListening, onTap: _toggleMic),
         ],
       ),
