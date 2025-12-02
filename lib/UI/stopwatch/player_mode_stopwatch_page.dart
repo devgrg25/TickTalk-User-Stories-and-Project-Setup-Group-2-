@@ -2,8 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../logic/stopwatch/player_mode_manager.dart';
 import '../../../logic/stopwatch/stopwatch_controller.dart';
 import '../widgets/glass_button.dart';
+import 'multi_player_summary_page.dart';
 
 class PlayerModeStopwatchPage extends StatefulWidget {
   final int playerCount;
@@ -16,52 +18,49 @@ class PlayerModeStopwatchPage extends StatefulWidget {
   });
 
   @override
-  State<PlayerModeStopwatchPage> createState() => _PlayerModeStopwatchPageState();
+  State<PlayerModeStopwatchPage> createState() =>
+      _PlayerModeStopwatchPageState();
 }
 
 class _PlayerModeStopwatchPageState extends State<PlayerModeStopwatchPage> {
-  List<StopwatchController> controllers = [];
-  List<List<Duration>> laps = [];
+  final pm = PlayerModeManager.instance;
   Timer? ticker;
 
   @override
   void initState() {
     super.initState();
-    _initPlayers();
+
+    pm.createPlayers(widget.playerCount);
+
+    // ⭐ Auto-summary callback
+    pm.onAllPlayersStopped = (summaries) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MultiPlayerSummaryPage(
+            summaries: summaries,
+            onClose: () => Navigator.of(context).pop(),
+          ),
+        ),
+      );
+    };
+
+    ticker = Timer.periodic(
+      const Duration(milliseconds: 100),
+          (_) => mounted ? setState(() {}) : null,
+    );
   }
 
   @override
   void didUpdateWidget(covariant PlayerModeStopwatchPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.playerCount != widget.playerCount) {
-      _disposePlayers();
-      _initPlayers();
+    if (widget.playerCount != oldWidget.playerCount) {
+      pm.createPlayers(widget.playerCount);
     }
-  }
-
-  void _initPlayers() {
-    controllers = List.generate(widget.playerCount, (_) => StopwatchController());
-    laps = List.generate(widget.playerCount, (_) => []);
-
-    ticker?.cancel();
-    ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  void _disposePlayers() {
-    for (var c in controllers) {
-      c.stop();
-    }
-    controllers.clear();
-    laps.clear();
-    ticker?.cancel();
-    ticker = null;
   }
 
   @override
   void dispose() {
-    _disposePlayers();
+    ticker?.cancel();
     super.dispose();
   }
 
@@ -69,6 +68,8 @@ class _PlayerModeStopwatchPageState extends State<PlayerModeStopwatchPage> {
 
   @override
   Widget build(BuildContext context) {
+    final players = pm.controllers;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
       body: SafeArea(
@@ -85,16 +86,40 @@ class _PlayerModeStopwatchPageState extends State<PlayerModeStopwatchPage> {
             ),
             const SizedBox(height: 12),
 
+            // --------------------------
+            // Start All + Stop All
+            // --------------------------
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                GlassButton(
+                  text: "Start All",
+                  onPressed: pm.startAll,
+                ),
+                const SizedBox(width: 16),
+                GlassButton(
+                  text: "Stop All",
+                  onPressed: pm.stopAll,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
+
+            // --------------------------
+            // PLAYER LIST
+            // --------------------------
             Expanded(
               child: ListView.builder(
-                itemCount: controllers.length, // use controllers length for safety
+                itemCount: players.length,
                 itemBuilder: (_, i) {
-                  final c = controllers[i];
-                  final lapList = laps[i];
+                  final c = players[i];
+                  final lapList = pm.laps[i];
 
                   return Container(
-                    margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                    padding: const EdgeInsets.all(14),
+                    margin: const EdgeInsets.symmetric(
+                        vertical: 10, horizontal: 16),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.25),
                       borderRadius: BorderRadius.circular(16),
@@ -109,8 +134,7 @@ class _PlayerModeStopwatchPageState extends State<PlayerModeStopwatchPage> {
                             fontSize: 18,
                           ),
                         ),
-
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
 
                         Text(
                           format(c.elapsedMs),
@@ -125,38 +149,37 @@ class _PlayerModeStopwatchPageState extends State<PlayerModeStopwatchPage> {
 
                         Wrap(
                           spacing: 10,
-                          runSpacing: 10,
                           children: [
-                            if (!c.isPaused && c.elapsedMs == 0)
-                              GlassButton(text: "Start", onPressed: () => c.start()),
+                            if (!c.isRunning && c.elapsedMs == 0)
+                              GlassButton(
+                                text: "Start",
+                                onPressed: () => pm.startPlayer(i),
+                              ),
 
-                            if (!c.isPaused && c.elapsedMs > 0)
-                              GlassButton(text: "Pause", onPressed: () => c.pause()),
+                            if (c.isRunning && !c.isPaused)
+                              GlassButton(
+                                text: "Pause",
+                                onPressed: () => pm.pausePlayer(i),
+                              ),
 
                             if (c.isPaused)
-                              GlassButton(text: "Resume", onPressed: () => c.resume()),
+                              GlassButton(
+                                text: "Resume",
+                                onPressed: () => pm.resumePlayer(i),
+                              ),
 
                             if (c.elapsedMs > 0)
                               GlassButton(
                                 text: "Lap",
-                                onPressed: () {
-                                  setState(() {
-                                    lapList.insert(
-                                      0,
-                                      Duration(milliseconds: c.elapsedMs),
-                                    );
-                                  });
-                                },
+                                onPressed: () => setState(() {
+                                  pm.lapPlayer(i);
+                                }),
                               ),
 
                             if (c.elapsedMs > 0)
                               GlassButton(
                                 text: "Stop",
-                                onPressed: () {
-                                  c.stop();
-                                  c.reset();
-                                  setState(() => lapList.clear());
-                                },
+                                onPressed: () => pm.stopPlayer(i),
                               ),
                           ],
                         ),
@@ -167,17 +190,17 @@ class _PlayerModeStopwatchPageState extends State<PlayerModeStopwatchPage> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                "Laps",
-                                style: TextStyle(color: Colors.white70, fontSize: 14),
-                              ),
+                              const Text("Laps",
+                                  style: TextStyle(color: Colors.white70)),
                               const SizedBox(height: 6),
                               ...lapList.map(
                                     (lap) => Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 2),
+                                  padding:
+                                  const EdgeInsets.symmetric(vertical: 2),
                                   child: Text(
                                     format(lap.inMilliseconds),
-                                    style: const TextStyle(color: Colors.white),
+                                    style:
+                                    const TextStyle(color: Colors.white),
                                   ),
                                 ),
                               ),
@@ -190,13 +213,11 @@ class _PlayerModeStopwatchPageState extends State<PlayerModeStopwatchPage> {
               ),
             ),
 
-            const SizedBox(height: 12),
-
+            const SizedBox(height: 10),
             ElevatedButton(
               onPressed: widget.onExit,
               child: const Text("Exit Player Mode"),
             ),
-
             const SizedBox(height: 16),
           ],
         ),

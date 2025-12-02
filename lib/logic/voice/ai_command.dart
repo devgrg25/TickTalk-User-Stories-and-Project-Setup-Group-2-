@@ -18,29 +18,50 @@ class AiStep {
 class AiCommand {
   final String type;
 
-  // Simple timer
+  // --------------------------
+  // Timer
+  // --------------------------
   final int? seconds;
   final String? label;
 
-  // Interval timer
+  // --------------------------
+  // Interval
+  // --------------------------
   final int? workSeconds;
   final int? restSeconds;
   final int? rounds;
 
-  // Routine
+  // --------------------------
+  // Multi-step routine
+  // --------------------------
   final String? routineName;
   final bool? autoSave;
   final bool? autoStart;
+  final List<AiStep>? steps;
 
+  // --------------------------
   // Navigation
+  // --------------------------
   final String? target;
 
-  // Rename routine
+  // --------------------------
+  // Routine rename
+  // --------------------------
   final String? oldName;
   final String? newName;
 
-  // Multi-step routines
-  final List<AiStep>? steps;
+  // --------------------------
+  // Stopwatch summary
+  // --------------------------
+  final int? lapNumber;
+  final double? valueSeconds;
+
+  // --------------------------
+  // Player Mode
+  // --------------------------
+  final int? playerIndex;        // For single-player actions
+  final bool? startAll;
+  final bool? stopAll;
 
   AiCommand({
     required this.type,
@@ -52,31 +73,34 @@ class AiCommand {
     this.routineName,
     this.autoSave,
     this.autoStart,
+    this.steps,
     this.target,
     this.oldName,
     this.newName,
-    this.steps,
+    this.lapNumber,
+    this.valueSeconds,
+    this.playerIndex,
+    this.startAll,
+    this.stopAll,
   });
 
   factory AiCommand.fromJson(Map<String, dynamic> json) {
     return AiCommand(
       type: json["type"] ?? "",
 
-      // Simple timer
+      // Timer
       seconds: json["seconds"],
       label: json["label"],
 
       // Interval
       workSeconds: json["workSeconds"],
       restSeconds: json["restSeconds"],
-      rounds: json["rounds"] == null
-          ? null
-          : int.tryParse(json["rounds"].toString()) ?? json["rounds"],
+      rounds: json["rounds"],
 
-      // Routines
+      // Routine
       routineName: json["routineName"],
       autoSave: json["autoSave"],
-      autoStart: json["autoStart"] ?? false,
+      autoStart: json["autoStart"],
 
       // Navigation
       target: json["target"],
@@ -85,12 +109,22 @@ class AiCommand {
       oldName: json["oldName"],
       newName: json["newName"],
 
-      // MULTI-STEP routines (strong typing)
+      // Steps
       steps: json["steps"] != null
           ? (json["steps"] as List)
           .map((e) => AiStep.fromJson(e as Map<String, dynamic>))
           .toList()
           : null,
+
+      // Summary
+      lapNumber: json["lapNumber"],
+      valueSeconds:
+      json["valueSeconds"] == null ? null : (json["valueSeconds"] as num).toDouble(),
+
+      // Player mode
+      playerIndex: json["playerIndex"],
+      startAll: json["startAll"],
+      stopAll: json["stopAll"],
     );
   }
 }

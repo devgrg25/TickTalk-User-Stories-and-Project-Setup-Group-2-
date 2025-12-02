@@ -3,18 +3,17 @@ import 'package:http/http.dart' as http;
 import 'ai_command.dart';
 
 class AiInterpreter {
-  // 👉 Choose which backend to use
   static bool useCloudflare = true;
 
-  // 👉 Change ONLY this URL each time Cloudflare Tunnel gives you a new one
-  static String cloudflareUrl = "https://intimate-flag-slightly-orientation.trycloudflare.com";
-
-  // 👉 Home local network (not used on eduroam)
+  static String cloudflareUrl =
+      "https://agenda-term-against-fate.trycloudflare.com";
   static String localUrl = "http://192.168.0.121:8000";
 
-  // Auto-select based on demo setting
   static String get baseUrl => useCloudflare ? cloudflareUrl : localUrl;
 
+  static Map<String, dynamic>? lastRawJson;
+
+  // NORMAL MODE
   static Future<AiCommand?> interpret(String rawText) async {
     final url = Uri.parse("$baseUrl/interpret");
 
@@ -28,40 +27,57 @@ class AiInterpreter {
       );
 
       print("🌐 AI response: ${response.body}");
+      lastRawJson = jsonDecode(response.body);
 
-      if (response.statusCode != 200) {
-        print("❌ AI HTTP error: ${response.statusCode}");
-        return null;
-      }
+      if (response.statusCode != 200) return null;
 
-      final data = jsonDecode(response.body);
+      final json = jsonDecode(response.body);
+      if (json is! Map<String, dynamic>) return null;
 
-      if (data is! Map<String, dynamic>) {
-        print("❌ AI response was not JSON Map");
-        return null;
-      }
-
-      final cmd = AiCommand.fromJson(data);
-
-      // 🔥 NEW DEBUGGING — show steps if backend sent any
-      if (cmd.steps != null) {
-        print("🧩 Parsed ${cmd.steps!.length} routine steps");
-      }
-
-      return cmd;
+      return AiCommand.fromJson(json);
 
     } catch (e) {
-      print("❌ AI interpreter exception: $e");
+      print("❌ AI Interpreter Exception: $e");
       return null;
     }
   }
 
-  static String _normalize(String text) {
-    final fillers = ["uh", "umm", "like", "you know"];
-    text = text.toLowerCase();
-    for (final f in fillers) {
-      text = text.replaceAll(f, "");
+  // SUMMARY MODE
+  static Future<AiCommand?> interpretSummary({
+    required String rawText,
+    required int totalMs,
+    required List<int> lapsMs,
+  }) async {
+    final url = Uri.parse("$baseUrl/interpret");
+
+    final payload = {
+      "text": rawText,
+      "totalMs": totalMs,
+      "lapsMs": lapsMs,
+    };
+
+    print("🌐 AI summary request: $payload");
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(payload),
+      );
+
+      print("🌐 AI summary response: ${response.body}");
+      lastRawJson = jsonDecode(response.body);
+
+      if (response.statusCode != 200) return null;
+
+      final data = jsonDecode(response.body);
+      if (data is! Map<String, dynamic>) return null;
+
+      return AiCommand.fromJson(data);
+
+    } catch (e) {
+      print("❌ AI Summary Interpreter Exception: $e");
+      return null;
     }
-    return text.trim();
   }
 }
