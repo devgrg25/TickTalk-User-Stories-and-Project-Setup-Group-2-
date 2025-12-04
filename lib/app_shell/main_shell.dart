@@ -13,18 +13,19 @@ import '../UI/stopwatch/normal_stopwatch_page.dart';
 import '../UI/stopwatch/stopwatch_summary_page.dart';
 import '../UI/stopwatch/player_count_selector_page.dart';
 import '../UI/stopwatch/player_mode_stopwatch_page.dart';
-import '../UI/stopwatch/multi_player_summary_page.dart';    // ⭐️ ADD THIS IMPORT
+import '../UI/stopwatch/multi_player_summary_page.dart';
 
 // Logic
 import '../logic/stopwatch/normal_stopwatch_shared_controller.dart';
 import '../logic/tutorial/tutorial_controller.dart';
-import '../logic/stopwatch/player_mode_manager.dart';       // ⭐️ PLAYER MANAGER IMPORT
+import '../logic/stopwatch/player_mode_manager.dart';
 
 import 'voice_mic_bar.dart';
 import 'voice_router.dart';
 
 import '../UI/settings/font_scale.dart';
 import '../logic/voice/voice_tts_service.dart';
+
 
 
 class MainShell extends StatefulWidget {
@@ -59,30 +60,58 @@ class _MainShellState extends State<MainShell> {
   // Player Mode
   int? _playerCount = 1;
 
-  // ⭐️ PLAYER MODE SUMMARY STORAGE
+  // PLAYER MODE SUMMARY STORAGE
   List<PlayerStopwatchSummary>? _playerSummaries;
-
 
   @override
   void initState() {
     super.initState();
 
-    // TICKER FOR NORMAL STOPWATCH
+    // -----------------------------------------------------
+    // NORMAL STOPWATCH TICKER
+    // -----------------------------------------------------
     sharedSW.onTick = () {
       if (mounted) setState(() {});
     };
 
+
     // -----------------------------------------------------
     // ⭐️ LISTEN TO PLAYER-MODE SUMMARY CALLBACK
     // -----------------------------------------------------
-    PlayerModeManager.instance.onAllPlayersStopped = (summaries) {
-      setState(() {
-        _playerSummaries = summaries;
-        _index = 9; // navigate to MultiPlayerSummaryPage
-      });
+    PlayerModeManager.instance.onAllPlayersStopped = (summaries) async {
+      _playerSummaries = summaries;
+
+      setState(() => _index = 9);
+
+      await VoiceTtsService.instance.speak("All players have stopped. Here are the results.");
+
+      for (final s in summaries) {
+        final sec = s.total.inSeconds;
+
+        await VoiceTtsService.instance
+            .speak("Player ${s.number} completed in $sec seconds.");
+
+        if (s.laps.isEmpty) {
+          await VoiceTtsService.instance.speak("No laps recorded.");
+          continue;
+        }
+
+        await VoiceTtsService.instance
+            .speak("They recorded ${s.laps.length} laps.");
+
+        for (int i = 0; i < s.laps.length; i++) {
+          final lapSec = s.laps[i].inSeconds;
+          await VoiceTtsService.instance
+              .speak("Lap ${i + 1}: ${lapSec} seconds.");
+        }
+      }
+
+      await Future.delayed(const Duration(milliseconds: 300));
     };
 
-    // Voice Router
+    // -----------------------------------------------------
+    // VOICE ROUTER
+    // -----------------------------------------------------
     _voiceRouter = VoiceRouter(
       onNavigateTab: (tab) {
         setState(() => _index = tab);
@@ -96,13 +125,14 @@ class _MainShellState extends State<MainShell> {
           _summaryTotal = total;
           _summaryLaps = laps;
           _voiceRouter.setSummary(total, laps);
-
-          _index = 6; // Show normal summary page
+          _index = 6;
         });
       },
     );
 
-    // Tutorial Controller
+    // -----------------------------------------------------
+    // TUTORIAL CONTROLLER
+    // -----------------------------------------------------
     _tutorial = TutorialController(
       context: context,
       goToTab: (tab) {
@@ -110,11 +140,14 @@ class _MainShellState extends State<MainShell> {
         if (tab == 2) routinesKey.currentState?.reload();
       },
       pushPage: (page) async {
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+        await Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => page));
       },
     );
 
-    // Start tutorial if needed
+    // -----------------------------------------------------
+    // AUTO START TUTORIAL IF FLAG ENABLED
+    // -----------------------------------------------------
     if (widget.startTutorial) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _tutorial.start();
@@ -128,7 +161,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   // ------------------------------------------------------------
-  // 🔥 ADVANCED MIC LOGIC (unchanged)
+  // ADVANCED MIC LOGIC
   // ------------------------------------------------------------
   Future<void> _toggleMic() async {
     if (!_isListening) {
@@ -166,13 +199,11 @@ class _MainShellState extends State<MainShell> {
 
           final lower = _lastWords.toLowerCase().trim();
 
-          // Stop mic state
           setState(() => _isListening = false);
           try {
             await _speech.stop();
           } catch (_) {}
 
-          // Tutorial Cancel / Resume
           if (_tutorial.isActive) {
             bool skip = lower.contains('skip') ||
                 lower.contains('exit tutorial') ||
@@ -188,7 +219,6 @@ class _MainShellState extends State<MainShell> {
             return;
           }
 
-          // Restart tutorial
           bool wantsTutorial =
               lower.contains('start tutorial') ||
                   lower.contains('restart tutorial') ||
@@ -201,7 +231,6 @@ class _MainShellState extends State<MainShell> {
             return;
           }
 
-          // Font controls
           if (lower.contains('increase font') ||
               lower.contains('bigger text') ||
               lower.contains('larger text')) {
@@ -218,12 +247,10 @@ class _MainShellState extends State<MainShell> {
             return;
           }
 
-          // NORMAL VOICE ROUTING
           if (lower.isNotEmpty) _voiceRouter.handle(lower);
         },
       );
     } else {
-      // Stop listening
       setState(() => _isListening = false);
       try {
         await _speech.stop();
@@ -235,12 +262,15 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      const HomePage(),                                 // 0
+      const HomePage(), // 0
+
       KeyedSubtree(
         key: createTimerKey,
         child: CreateTimerPage(onTimerStarted: _returnHome),
-      ),                                                // 1
-      RoutinesPage(key: routinesKey),                   // 2
+      ), // 1
+
+      RoutinesPage(key: routinesKey), // 2
+
       StopwatchSelectorPage(
         onNavigate: (i) => setState(() => _index = i),
         controller: sharedSW,
@@ -249,8 +279,10 @@ class _MainShellState extends State<MainShell> {
           _summaryLaps = laps;
           setState(() => _index = 6);
         },
-      ),                                                // 3
-      const SettingsPage(),                             // 4
+      ), // 3
+
+      const SettingsPage(), // 4
+
       NormalStopwatchPage(
         controller: sharedSW,
         onStop: (total, laps) {
@@ -258,7 +290,8 @@ class _MainShellState extends State<MainShell> {
           _summaryLaps = laps;
           setState(() => _index = 6);
         },
-      ),                                                // 5
+      ), // 5
+
       StopwatchSummaryPage(
         total: _summaryTotal,
         laps: _summaryLaps,
@@ -266,23 +299,34 @@ class _MainShellState extends State<MainShell> {
           _voiceRouter.clearSummary();
           setState(() => _index = 3);
         },
-      ),                                                // 6
+      ), // 6
+
       PlayerCountSelectorPage(
         onSelectPlayers: (count) {
           _playerCount = count;
+
+          // enable voice control
+          _voiceRouter.setPlayerModeActive(true);
+
           setState(() => _index = 8);
         },
-      ),                                                // 7
+      ), // 7
+
+      // ⭐️ PLAYER MODE SCREEN — INDEX 8
       PlayerModeStopwatchPage(
         playerCount: _playerCount ?? 1,
-        onExit: () => setState(() => _index = 3),
-      ),                                                // 8
+        voiceRouter: _voiceRouter,
+        onExit: () {
+          _voiceRouter.setPlayerModeActive(false);
+          setState(() => _index = 3);
+        },
+      ), // 8
 
-      // ⭐️ MULTI PLAYER SUMMARY PAGE ADDED AS INDEX 9
+      // ⭐️ MULTI PLAYER SUMMARY PAGE — INDEX 9
       MultiPlayerSummaryPage(
         summaries: _playerSummaries ?? [],
         onClose: () => setState(() => _index = 3),
-      ),                                                // 9
+      ), // 9
     ];
 
     return Scaffold(
@@ -290,7 +334,6 @@ class _MainShellState extends State<MainShell> {
       body: SafeArea(
         child: Stack(
           children: [
-
             IndexedStack(index: _index, children: screens),
 
             if (_isListening && _lastWords.isNotEmpty)
@@ -326,29 +369,13 @@ class _MainShellState extends State<MainShell> {
               if (i == 2) routinesKey.currentState?.reload();
             },
             destinations: const [
-              NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home),
-                  label: "Home"),
-              NavigationDestination(
-                  icon: Icon(Icons.timer_outlined),
-                  selectedIcon: Icon(Icons.timer),
-                  label: "Timer"),
-              NavigationDestination(
-                  icon: Icon(Icons.list_alt_outlined),
-                  selectedIcon: Icon(Icons.list_alt),
-                  label: "Routines"),
-              NavigationDestination(
-                  icon: Icon(Icons.timer),
-                  selectedIcon: Icon(Icons.timer_rounded),
-                  label: "Stopwatch"),
-              NavigationDestination(
-                  icon: Icon(Icons.settings_outlined),
-                  selectedIcon: Icon(Icons.settings),
-                  label: "Settings"),
+              NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: "Home"),
+              NavigationDestination(icon: Icon(Icons.timer_outlined), selectedIcon: Icon(Icons.timer), label: "Timer"),
+              NavigationDestination(icon: Icon(Icons.list_alt_outlined), selectedIcon: Icon(Icons.list_alt), label: "Routines"),
+              NavigationDestination(icon: Icon(Icons.timer), selectedIcon: Icon(Icons.timer_rounded), label: "Stopwatch"),
+              NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: "Settings"),
             ],
           ),
-
           VoiceMicBar(isListening: _isListening, onTap: _toggleMic),
         ],
       ),
