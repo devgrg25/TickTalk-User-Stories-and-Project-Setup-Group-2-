@@ -28,6 +28,10 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+        #Run tests
+      - name: Run Tests
+        run: flutter test --no-pub
+
       - name: Accept Android licenses
         run: yes | flutter doctor --android-licenses
 
