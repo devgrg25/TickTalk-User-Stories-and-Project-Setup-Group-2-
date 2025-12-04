@@ -63,6 +63,11 @@ class AiCommand {
   final bool? startAll;
   final bool? stopAll;
 
+  // NEW: global player controls
+  final bool? pauseAll;
+  final bool? resumeAll;
+
+
   // --------------------------
   // NEW: Player Mode (full mode N players)
   // --------------------------
@@ -101,6 +106,10 @@ class AiCommand {
     this.playerIndex,
     this.startAll,
     this.stopAll,
+
+    this.pauseAll,
+    this.resumeAll,
+
 
     // NEW: full mode N players
     this.playerCount,
@@ -146,11 +155,17 @@ class AiCommand {
 
       // Player mode single-player actions
       playerIndex: json["playerIndex"],
-      startAll: json["startAll"],
-      stopAll: json["stopAll"],
 
-      // NEW: full mode N players
+// Global player commands (snake_case from backend)
+// These are booleans, so treat presence as TRUE
+      startAll: json["start_all_players"] == true,
+      stopAll: json["stop_all_players"] == true,
+      pauseAll: json["pause_all_players"] == true,
+      resumeAll: json["resume_all_players"] == true,
+
+// NEW: full mode N players
       playerCount: json["playerCount"],
+
     );
   }
 }

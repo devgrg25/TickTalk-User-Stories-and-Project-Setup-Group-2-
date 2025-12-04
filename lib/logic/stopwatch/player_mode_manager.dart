@@ -64,7 +64,7 @@ class PlayerModeManager {
   }
 
   // ---------------------------------------------------
-  // ALL PLAYERS
+  // ALL PLAYERS - START / STOP
   // ---------------------------------------------------
   void startAll() {
     for (var c in controllers) {
@@ -81,6 +81,28 @@ class PlayerModeManager {
     _triggerSummary();
 
     _resetAll();
+  }
+
+  // ---------------------------------------------------
+  // NEW: PAUSE ALL
+  // ---------------------------------------------------
+  void pauseAll() {
+    for (var c in controllers) {
+      if (c.isRunning) {
+        c.pause();
+      }
+    }
+  }
+
+  // ---------------------------------------------------
+  // NEW: RESUME ALL
+  // ---------------------------------------------------
+  void resumeAll() {
+    for (var c in controllers) {
+      if (!c.isRunning) {
+        c.resume();
+      }
+    }
   }
 
   // ---------------------------------------------------

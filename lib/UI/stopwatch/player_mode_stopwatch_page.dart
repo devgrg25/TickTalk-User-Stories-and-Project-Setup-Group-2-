@@ -7,13 +7,19 @@ import '../../../logic/stopwatch/stopwatch_controller.dart';
 import '../widgets/glass_button.dart';
 import 'multi_player_summary_page.dart';
 
+// IMPORT router
+import '../../app_shell/voice_router.dart';
+
+
 class PlayerModeStopwatchPage extends StatefulWidget {
   final int playerCount;
   final VoidCallback onExit;
+  final VoiceRouter voiceRouter; // <-- ADD
 
   const PlayerModeStopwatchPage({
     super.key,
     required this.playerCount,
+    required this.voiceRouter,   // <-- ADD
     required this.onExit,
   });
 
@@ -30,6 +36,9 @@ class _PlayerModeStopwatchPageState extends State<PlayerModeStopwatchPage> {
   void initState() {
     super.initState();
 
+    // ⭐ Enable voice commands for player mode
+    widget.voiceRouter.setPlayerModeActive(true);
+
     pm.createPlayers(widget.playerCount);
 
     // ⭐ Auto-summary callback
@@ -38,7 +47,9 @@ class _PlayerModeStopwatchPageState extends State<PlayerModeStopwatchPage> {
         MaterialPageRoute(
           builder: (_) => MultiPlayerSummaryPage(
             summaries: summaries,
-            onClose: () => Navigator.of(context).pop(),
+            onClose: () {
+              Navigator.of(context).pop();
+            },
           ),
         ),
       );
@@ -60,6 +71,9 @@ class _PlayerModeStopwatchPageState extends State<PlayerModeStopwatchPage> {
 
   @override
   void dispose() {
+    // ⭐ Disable voice commands for player mode
+    widget.voiceRouter.setPlayerModeActive(false);
+
     ticker?.cancel();
     super.dispose();
   }
@@ -70,156 +84,166 @@ class _PlayerModeStopwatchPageState extends State<PlayerModeStopwatchPage> {
   Widget build(BuildContext context) {
     final players = pm.controllers;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F0F0F),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 16),
-            Text(
-              "Player Mode (${widget.playerCount} Players)",
-              style: GoogleFonts.orbitron(
-                color: Colors.white,
-                fontSize: 22,
-                letterSpacing: 2,
+    return WillPopScope(
+      onWillPop: () async {
+        widget.voiceRouter.setPlayerModeActive(false);
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0F0F0F),
+        body: SafeArea(
+          child: Column(
+            children: [
+              const SizedBox(height: 16),
+              Text(
+                "Player Mode (${widget.playerCount} Players)",
+                style: GoogleFonts.orbitron(
+                  color: Colors.white,
+                  fontSize: 22,
+                  letterSpacing: 2,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-            // --------------------------
-            // Start All + Stop All
-            // --------------------------
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                GlassButton(
-                  text: "Start All",
-                  onPressed: pm.startAll,
-                ),
-                const SizedBox(width: 16),
-                GlassButton(
-                  text: "Stop All",
-                  onPressed: pm.stopAll,
-                ),
-              ],
-            ),
+              // --------------------------
+              // Start All + Stop All
+              // --------------------------
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GlassButton(
+                    text: "Start All",
+                    onPressed: pm.startAll,
+                  ),
+                  const SizedBox(width: 16),
+                  GlassButton(
+                    text: "Stop All",
+                    onPressed: pm.stopAll,
+                  ),
+                ],
+              ),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-            // --------------------------
-            // PLAYER LIST
-            // --------------------------
-            Expanded(
-              child: ListView.builder(
-                itemCount: players.length,
-                itemBuilder: (_, i) {
-                  final c = players[i];
-                  final lapList = pm.laps[i];
+              // --------------------------
+              // PLAYER LIST
+              // --------------------------
+              Expanded(
+                child: ListView.builder(
+                  itemCount: players.length,
+                  itemBuilder: (_, i) {
+                    final c = players[i];
+                    final lapList = pm.laps[i];
 
-                  return Container(
-                    margin: const EdgeInsets.symmetric(
-                        vertical: 10, horizontal: 16),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.25),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Player ${i + 1}",
-                          style: GoogleFonts.orbitron(
-                            color: Colors.blueAccent,
-                            fontSize: 18,
+                    return Container(
+                      margin: const EdgeInsets.symmetric(
+                          vertical: 10, horizontal: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Player ${i + 1}",
+                            style: GoogleFonts.orbitron(
+                              color: Colors.blueAccent,
+                              fontSize: 18,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
+                          const SizedBox(height: 8),
 
-                        Text(
-                          format(c.elapsedMs),
-                          style: GoogleFonts.orbitron(
-                            color: Colors.white,
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
+                          Text(
+                            format(c.elapsedMs),
+                            style: GoogleFonts.orbitron(
+                              color: Colors.white,
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
 
-                        const SizedBox(height: 10),
+                          const SizedBox(height: 10),
 
-                        Wrap(
-                          spacing: 10,
-                          children: [
-                            if (!c.isRunning && c.elapsedMs == 0)
-                              GlassButton(
-                                text: "Start",
-                                onPressed: () => pm.startPlayer(i),
-                              ),
-
-                            if (c.isRunning && !c.isPaused)
-                              GlassButton(
-                                text: "Pause",
-                                onPressed: () => pm.pausePlayer(i),
-                              ),
-
-                            if (c.isPaused)
-                              GlassButton(
-                                text: "Resume",
-                                onPressed: () => pm.resumePlayer(i),
-                              ),
-
-                            if (c.elapsedMs > 0)
-                              GlassButton(
-                                text: "Lap",
-                                onPressed: () => setState(() {
-                                  pm.lapPlayer(i);
-                                }),
-                              ),
-
-                            if (c.elapsedMs > 0)
-                              GlassButton(
-                                text: "Stop",
-                                onPressed: () => pm.stopPlayer(i),
-                              ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        if (lapList.isNotEmpty)
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          Wrap(
+                            spacing: 10,
                             children: [
-                              const Text("Laps",
-                                  style: TextStyle(color: Colors.white70)),
-                              const SizedBox(height: 6),
-                              ...lapList.map(
-                                    (lap) => Padding(
-                                  padding:
-                                  const EdgeInsets.symmetric(vertical: 2),
-                                  child: Text(
-                                    format(lap.inMilliseconds),
-                                    style:
-                                    const TextStyle(color: Colors.white),
-                                  ),
+                              if (!c.isRunning && c.elapsedMs == 0)
+                                GlassButton(
+                                  text: "Start",
+                                  onPressed: () => pm.startPlayer(i),
                                 ),
-                              ),
+
+                              if (c.isRunning && !c.isPaused)
+                                GlassButton(
+                                  text: "Pause",
+                                  onPressed: () => pm.pausePlayer(i),
+                                ),
+
+                              if (c.isPaused)
+                                GlassButton(
+                                  text: "Resume",
+                                  onPressed: () => pm.resumePlayer(i),
+                                ),
+
+                              if (c.elapsedMs > 0)
+                                GlassButton(
+                                  text: "Lap",
+                                  onPressed: () => setState(() {
+                                    pm.lapPlayer(i);
+                                  }),
+                                ),
+
+                              if (c.elapsedMs > 0)
+                                GlassButton(
+                                  text: "Stop",
+                                  onPressed: () => pm.stopPlayer(i),
+                                ),
                             ],
                           ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
 
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: widget.onExit,
-              child: const Text("Exit Player Mode"),
-            ),
-            const SizedBox(height: 16),
-          ],
+                          const SizedBox(height: 12),
+
+                          if (lapList.isNotEmpty)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text("Laps",
+                                    style: TextStyle(color: Colors.white70)),
+                                const SizedBox(height: 6),
+                                ...lapList.map(
+                                      (lap) => Padding(
+                                    padding:
+                                    const EdgeInsets.symmetric(vertical: 2),
+                                    child: Text(
+                                      format(lap.inMilliseconds),
+                                      style:
+                                      const TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () {
+                  // Disable voice commands
+                  widget.voiceRouter.setPlayerModeActive(false);
+                  widget.onExit();
+                },
+                child: const Text("Exit Player Mode"),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );

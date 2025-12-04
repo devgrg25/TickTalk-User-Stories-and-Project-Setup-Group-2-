@@ -29,6 +29,15 @@ class VoiceRouter {
     required this.stopwatchController,
     required this.onShowSummary,
   });
+  // -------------------------------------------------------------
+  // PLAYER MODE ACTIVE FLAG
+  // -------------------------------------------------------------
+  bool isInPlayerMode = false;
+
+  void setPlayerModeActive(bool active) {
+    isInPlayerMode = active;
+  }
+
 
   // -------------------------------------------------------------
   // SUMMARY STATE
@@ -72,7 +81,7 @@ class VoiceRouter {
         _waitingForPlayerCount = false;
 
         // navigate to player mode tab
-        onNavigateTab(5);
+        onNavigateTab(8);
 
         // create players
         PlayerModeManager.instance.createPlayers(n);
@@ -250,6 +259,28 @@ class VoiceRouter {
   // AI COMMAND EXECUTION (BACKEND)
   // -------------------------------------------------------------
   Future<void> _executeAi(AiCommand cmd) async {
+
+    // ---------------------------------------------------------
+// BLOCK PLAYER MODE COMMANDS IF NOT IN PLAYER MODE
+// ---------------------------------------------------------
+    if (!isInPlayerMode &&
+        (cmd.type == "start_player" ||
+            cmd.type == "pause_player" ||
+            cmd.type == "resume_player" ||
+            cmd.type == "lap_player" ||
+            cmd.type == "stop_player" ||
+            cmd.type == "start_all_players" ||
+            cmd.type == "stop_all_players" ||
+            cmd.type == "pause_all_players" ||
+            cmd.type == "resume_all_players")) {
+
+      await VoiceTtsService.instance.speak(
+          "Player mode is not active. Open player mode first."
+      );
+      return;
+    }
+
+
     switch (cmd.type) {      // NEW: Backend asks user for player count
       case "ask_player_count":
         _waitingForPlayerCount = true;
@@ -261,12 +292,14 @@ class VoiceRouter {
         final count = cmd.playerCount ?? 1;
         _waitingForPlayerCount = false;
 
-        onNavigateTab(5);
+        onNavigateTab(8);
         PlayerModeManager.instance.createPlayers(count);
 
         await VoiceTtsService.instance
             .speak("Starting player mode with $count players.");
         return;
+
+
 
     // ---------------------------------------------------------
     // Simple Timer
@@ -559,25 +592,34 @@ class VoiceRouter {
     // ---------------------------------------------------------
     // PLAYER MODE COMMANDS
     // ---------------------------------------------------------
+
       case "start_player":
-        PlayerModeManager.instance.startPlayer(cmd.playerIndex!);
-        break;
+        PlayerModeManager.instance.startPlayer(cmd.playerIndex!-1);
+        await VoiceTtsService.instance.speak("Starting player ${cmd.playerIndex}.");
+        return;
 
       case "pause_player":
-        PlayerModeManager.instance.pausePlayer(cmd.playerIndex!);
-        break;
+        PlayerModeManager.instance.pausePlayer(cmd.playerIndex!-1);
+        await VoiceTtsService.instance.speak("Paused player ${cmd.playerIndex}.");
+        return;
 
       case "resume_player":
-        PlayerModeManager.instance.resumePlayer(cmd.playerIndex!);
-        break;
+        PlayerModeManager.instance.resumePlayer(cmd.playerIndex!-1);
+        await VoiceTtsService.instance.speak("Resumed player ${cmd.playerIndex}.");
+        return;
+
 
       case "lap_player":
-        PlayerModeManager.instance.lapPlayer(cmd.playerIndex!);
-        break;
+        PlayerModeManager.instance.lapPlayer(cmd.playerIndex!-1);
+        await VoiceTtsService.instance.speak("Lap recorded for player ${cmd.playerIndex}.");
+        return;
+
 
       case "stop_player":
-        PlayerModeManager.instance.stopPlayer(cmd.playerIndex!);
-        break;
+        PlayerModeManager.instance.stopPlayer(cmd.playerIndex!-1);
+        await VoiceTtsService.instance.speak("Stopped player ${cmd.playerIndex}.");
+        return;
+
 
       case "start_all_players":
         PlayerModeManager.instance.startAll();
@@ -586,6 +628,18 @@ class VoiceRouter {
       case "stop_all_players":
         PlayerModeManager.instance.stopAll();
         break;
+      case "pause_all_players":
+        PlayerModeManager.instance.pauseAll();
+        await VoiceTtsService.instance.speak("Paused all players.");
+        return;
+
+      case "resume_all_players":
+        PlayerModeManager.instance.resumeAll();
+        await VoiceTtsService.instance.speak("Resumed all players.");
+        return;
+
+
+
 
     // ---------------------------------------------------------
     // Rename routine
@@ -656,6 +710,12 @@ class VoiceRouter {
       await VoiceTtsService.instance.speak("Opening timer.");
       return true;
     }
+    // if (input.contains("player")) {
+    //   onNavigateTab(8);
+    //   await VoiceTtsService.instance.speak("Opening player mode.");
+    //   return true;
+    // }
+
 
     if (input.contains("go to routine") ||
         input.contains("go to routines")) {
