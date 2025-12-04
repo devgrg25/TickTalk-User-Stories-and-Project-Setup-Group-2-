@@ -5,8 +5,8 @@ import 'ai_command.dart';
 class AiInterpreter {
   static bool useCloudflare = true;
 
-  static String cloudflareUrl =
-      "https://explosion-bulk-shows-condition.trycloudflare.com";
+  // 👉 Change ONLY this URL each time Cloudflare Tunnel gives you a new one
+  static String cloudflareUrl = "https://birth-detection-mines-incorporated.trycloudflare.com";
 
   static String localUrl = "http://192.168.0.121:8000";
 

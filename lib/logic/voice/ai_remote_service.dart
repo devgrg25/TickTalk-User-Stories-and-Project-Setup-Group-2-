@@ -6,7 +6,7 @@ class AiRemoteService {
   static bool useCloudflare = true;
 
   // 👉 Update this URL whenever Cloudflare gives you a new one
-  static String cloudflareUrl = "https://explosion-bulk-shows-condition.trycloudflare.com";
+  static String cloudflareUrl = "https://birth-detection-mines-incorporated.trycloudflare.com";
 
   // 👉 Local testing at home (LAN)
   static const String localUrl = "http://192.168.0.121:8000";
