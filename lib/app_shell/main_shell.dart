@@ -13,13 +13,20 @@ import '../UI/stopwatch/normal_stopwatch_page.dart';
 import '../UI/stopwatch/stopwatch_summary_page.dart';
 import '../UI/stopwatch/player_count_selector_page.dart';
 import '../UI/stopwatch/player_mode_stopwatch_page.dart';
+import '../UI/stopwatch/multi_player_summary_page.dart';
 
 // Logic
 import '../logic/stopwatch/normal_stopwatch_shared_controller.dart';
 import '../logic/tutorial/tutorial_controller.dart';
+import '../logic/stopwatch/player_mode_manager.dart';
 
 import 'voice_mic_bar.dart';
 import 'voice_router.dart';
+
+import '../UI/settings/font_scale.dart';
+import '../logic/voice/voice_tts_service.dart';
+
+
 
 class MainShell extends StatefulWidget {
   final bool startTutorial;
@@ -43,32 +50,89 @@ class _MainShellState extends State<MainShell> {
   late final VoiceRouter _voiceRouter;
   late final TutorialController _tutorial;
 
-  // Stopwatch shared controller
+  // Normal stopwatch shared controller
   final NormalStopwatchSharedController sharedSW = NormalStopwatchSharedController();
 
-  // Summary variables
+  // Summary variables for SINGLE STOPWATCH
   Duration? _summaryTotal;
   List<Duration>? _summaryLaps;
 
   // Player Mode
   int? _playerCount = 1;
 
+  // PLAYER MODE SUMMARY STORAGE
+  List<PlayerStopwatchSummary>? _playerSummaries;
+
   @override
   void initState() {
     super.initState();
 
+    // -----------------------------------------------------
+    // NORMAL STOPWATCH TICKER
+    // -----------------------------------------------------
     sharedSW.onTick = () {
       if (mounted) setState(() {});
     };
 
+
+    // -----------------------------------------------------
+    // ⭐️ LISTEN TO PLAYER-MODE SUMMARY CALLBACK
+    // -----------------------------------------------------
+    PlayerModeManager.instance.onAllPlayersStopped = (summaries) async {
+      _playerSummaries = summaries;
+
+      setState(() => _index = 9);
+
+      await VoiceTtsService.instance.speak("All players have stopped. Here are the results.");
+
+      for (final s in summaries) {
+        final sec = s.total.inSeconds;
+
+        await VoiceTtsService.instance
+            .speak("Player ${s.number} completed in $sec seconds.");
+
+        if (s.laps.isEmpty) {
+          await VoiceTtsService.instance.speak("No laps recorded.");
+          continue;
+        }
+
+        await VoiceTtsService.instance
+            .speak("They recorded ${s.laps.length} laps.");
+
+        for (int i = 0; i < s.laps.length; i++) {
+          final lapSec = s.laps[i].inSeconds;
+          await VoiceTtsService.instance
+              .speak("Lap ${i + 1}: ${lapSec} seconds.");
+        }
+      }
+
+      await Future.delayed(const Duration(milliseconds: 300));
+    };
+
+    // -----------------------------------------------------
+    // VOICE ROUTER
+    // -----------------------------------------------------
     _voiceRouter = VoiceRouter(
       onNavigateTab: (tab) {
         setState(() => _index = tab);
         if (tab == 2) routinesKey.currentState?.reload();
       },
       stopwatchController: sharedSW,
+
+      // NORMAL STOPWATCH SUMMARY
+      onShowSummary: (total, laps) {
+        setState(() {
+          _summaryTotal = total;
+          _summaryLaps = laps;
+          _voiceRouter.setSummary(total, laps);
+          _index = 6;
+        });
+      },
     );
 
+    // -----------------------------------------------------
+    // TUTORIAL CONTROLLER
+    // -----------------------------------------------------
     _tutorial = TutorialController(
       context: context,
       goToTab: (tab) {
@@ -76,10 +140,14 @@ class _MainShellState extends State<MainShell> {
         if (tab == 2) routinesKey.currentState?.reload();
       },
       pushPage: (page) async {
-        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+        await Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => page));
       },
     );
 
+    // -----------------------------------------------------
+    // AUTO START TUTORIAL IF FLAG ENABLED
+    // -----------------------------------------------------
     if (widget.startTutorial) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _tutorial.start();
@@ -93,14 +161,11 @@ class _MainShellState extends State<MainShell> {
   }
 
   // ------------------------------------------------------------
-  // 🔥 ADVANCED MIC LOGIC WITH TUTORIAL INTEGRATION
+  // ADVANCED MIC LOGIC
   // ------------------------------------------------------------
   Future<void> _toggleMic() async {
     if (!_isListening) {
-      // Pause tutorial while listening
-      if (_tutorial.isActive && !_tutorial.isPaused) {
-        _tutorial.pause();
-      }
+      if (_tutorial.isActive && !_tutorial.isPaused) _tutorial.pause();
 
       final available = await _speech.initialize(
         onStatus: (status) {
@@ -134,13 +199,11 @@ class _MainShellState extends State<MainShell> {
 
           final lower = _lastWords.toLowerCase().trim();
 
-          // Stop mic
           setState(() => _isListening = false);
           try {
             await _speech.stop();
           } catch (_) {}
 
-          // Tutorial skip commands
           if (_tutorial.isActive) {
             bool skip = lower.contains('skip') ||
                 lower.contains('exit tutorial') ||
@@ -156,7 +219,6 @@ class _MainShellState extends State<MainShell> {
             return;
           }
 
-          // Restart tutorial
           bool wantsTutorial =
               lower.contains('start tutorial') ||
                   lower.contains('restart tutorial') ||
@@ -169,76 +231,102 @@ class _MainShellState extends State<MainShell> {
             return;
           }
 
-          // Normal voice routing
+          if (lower.contains('increase font') ||
+              lower.contains('bigger text') ||
+              lower.contains('larger text')) {
+            await FontScale.instance.increaseBy10();
+            await VoiceTtsService.instance.speak('Increasing font size.');
+            return;
+          }
+
+          if (lower.contains('decrease font') ||
+              lower.contains('smaller text') ||
+              lower.contains('reduce font')) {
+            await FontScale.instance.decreaseBy10();
+            await VoiceTtsService.instance.speak('Decreasing font size.');
+            return;
+          }
+
           if (lower.isNotEmpty) _voiceRouter.handle(lower);
         },
       );
     } else {
-      // Stop listening
       setState(() => _isListening = false);
       try {
         await _speech.stop();
       } catch (_) {}
-
-      if (_tutorial.isActive && _tutorial.isPaused) {
-        _tutorial.resume();
-      }
+      if (_tutorial.isActive && _tutorial.isPaused) _tutorial.resume();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final screens = [
-      const HomePage(),                                 // 0
+      const HomePage(), // 0
+
       KeyedSubtree(
         key: createTimerKey,
         child: CreateTimerPage(onTimerStarted: _returnHome),
-      ),                                                // 1
-      RoutinesPage(key: routinesKey),                   // 2
+      ), // 1
 
-      // Stopwatch selector
+      RoutinesPage(key: routinesKey), // 2
+
       StopwatchSelectorPage(
         onNavigate: (i) => setState(() => _index = i),
         controller: sharedSW,
         onStopFromPreview: (total, laps) {
           _summaryTotal = total;
           _summaryLaps = laps;
-          setState(() => _index = 6); // summary
+          setState(() => _index = 6);
         },
-      ),                                                // 3
+      ), // 3
 
-      const SettingsPage(),                             // 4
+      const SettingsPage(), // 4
 
-      // Normal stopwatch
       NormalStopwatchPage(
         controller: sharedSW,
         onStop: (total, laps) {
           _summaryTotal = total;
           _summaryLaps = laps;
-          setState(() => _index = 6); // summary page
+          setState(() => _index = 6);
         },
-      ),                                                // 5
+      ), // 5
 
-      // Summary page
       StopwatchSummaryPage(
         total: _summaryTotal,
         laps: _summaryLaps,
-        onClose: () => setState(() => _index = 3),
-      ),                                                // 6
+        onClose: () {
+          _voiceRouter.clearSummary();
+          setState(() => _index = 3);
+        },
+      ), // 6
 
-      // Player count
       PlayerCountSelectorPage(
         onSelectPlayers: (count) {
           _playerCount = count;
+
+          // enable voice control
+          _voiceRouter.setPlayerModeActive(true);
+
           setState(() => _index = 8);
         },
-      ),                                                // 7
+      ), // 7
 
-      // Player mode stopwatch
+      // ⭐️ PLAYER MODE SCREEN — INDEX 8
       PlayerModeStopwatchPage(
         playerCount: _playerCount ?? 1,
-        onExit: () => setState(() => _index = 3),
-      ),                                                // 8
+        voiceRouter: _voiceRouter,
+        onExit: () {
+          _voiceRouter.setPlayerModeActive(false);
+          setState(() => _index = 3);
+        },
+      ), // 8
+
+      // ⭐️ MULTI PLAYER SUMMARY PAGE — INDEX 9
+      MultiPlayerSummaryPage(
+        summaries: _playerSummaries ?? [],
+        onClose: () => setState(() => _index = 3),
+      ), // 9
     ];
 
     return Scaffold(

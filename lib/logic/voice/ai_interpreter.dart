@@ -3,18 +3,20 @@ import 'package:http/http.dart' as http;
 import 'ai_command.dart';
 
 class AiInterpreter {
-  // 👉 Choose which backend to use
   static bool useCloudflare = true;
 
   // 👉 Change ONLY this URL each time Cloudflare Tunnel gives you a new one
   static String cloudflareUrl = "https://birth-detection-mines-incorporated.trycloudflare.com";
 
-  // 👉 Home local network (not used on eduroam)
   static String localUrl = "http://192.168.0.121:8000";
 
-  // Auto-select based on demo setting
   static String get baseUrl => useCloudflare ? cloudflareUrl : localUrl;
 
+  static Map<String, dynamic>? lastRawJson;
+
+  // -------------------------------------------------------------
+  // NORMAL MODE
+  // -------------------------------------------------------------
   static Future<AiCommand?> interpret(String rawText) async {
     final url = Uri.parse("$baseUrl/interpret");
 
@@ -30,38 +32,99 @@ class AiInterpreter {
       print("🌐 AI response: ${response.body}");
 
       if (response.statusCode != 200) {
-        print("❌ AI HTTP error: ${response.statusCode}");
+        print("❌ Backend status ${response.statusCode}");
         return null;
       }
 
-      final data = jsonDecode(response.body);
+      final json = jsonDecode(response.body);
+      lastRawJson = json;
 
-      if (data is! Map<String, dynamic>) {
-        print("❌ AI response was not JSON Map");
+      // must be object
+      if (json is! Map<String, dynamic>) {
+        print("❌ AI response is not JSON object");
         return null;
       }
 
-      final cmd = AiCommand.fromJson(data);
-
-      // 🔥 NEW DEBUGGING — show steps if backend sent any
-      if (cmd.steps != null) {
-        print("🧩 Parsed ${cmd.steps!.length} routine steps");
+      // ignore backend error messages
+      final type = json["type"];
+      if (type == null || type == "" || type == "error") {
+        print("⚠️ AI returned error or unknown type: ${json["message"]}");
+        return null;
       }
 
-      return cmd;
+      // success → build command
+      try {
+        return AiCommand.fromJson(json);
+      } catch (e) {
+        print("❌ Failed to parse AiCommand: $e");
+        return null;
+      }
 
     } catch (e) {
-      print("❌ AI interpreter exception: $e");
+      print("❌ AI Interpreter Exception: $e");
       return null;
     }
   }
 
-  static String _normalize(String text) {
-    final fillers = ["uh", "umm", "like", "you know"];
-    text = text.toLowerCase();
-    for (final f in fillers) {
-      text = text.replaceAll(f, "");
+  // -------------------------------------------------------------
+  // SUMMARY MODE
+  // -------------------------------------------------------------
+  static Future<AiCommand?> interpretSummary({
+    required String rawText,
+    required int totalMs,
+    required List<int> lapsMs,
+  }) async {
+    final url = Uri.parse("$baseUrl/interpret");
+
+    final payload = {
+      "text": rawText,
+      "totalMs": totalMs,
+      "lapsMs": lapsMs,
+    };
+
+    print("🌐 AI summary request: $payload");
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(payload),
+      );
+
+      print("🌐 AI summary response: ${response.body}");
+
+      if (response.statusCode != 200) {
+        print("❌ Backend status ${response.statusCode}");
+        return null;
+      }
+
+      final json = jsonDecode(response.body);
+      lastRawJson = json;
+
+      // not an object? ignore
+      if (json is! Map<String, dynamic>) {
+        print("❌ AI summary response not JSON object");
+        return null;
+      }
+
+      // error handling
+      final type = json["type"];
+      if (type == null || type == "" || type == "error") {
+        print("⚠️ Summary error: ${json["message"]}");
+        return null;
+      }
+
+      // build command
+      try {
+        return AiCommand.fromJson(json);
+      } catch (e) {
+        print("❌ Failed to parse summary AiCommand: $e");
+        return null;
+      }
+
+    } catch (e) {
+      print("❌ AI Summary Interpreter Exception: $e");
+      return null;
     }
-    return text.trim();
   }
 }

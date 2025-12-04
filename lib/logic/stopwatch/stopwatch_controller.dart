@@ -8,8 +8,14 @@ class StopwatchController {
 
   VoidCallback? onTick;
 
+  /// 🔥 NEW — tells whether stopwatch is active (running or paused)
+  bool get isActive => _ticker != null;
+
+  bool get isRunning => _ticker != null && !isPaused;
+
+
   void start() {
-    stop();
+    stop(); // ensure clean start
     _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
       if (!isPaused) {
         elapsedMs += 100;
@@ -28,7 +34,7 @@ class StopwatchController {
 
   void stop() {
     _ticker?.cancel();
-    _ticker = null;
+    _ticker = null; // VERY IMPORTANT for isActive logic
   }
 
   void reset() {
