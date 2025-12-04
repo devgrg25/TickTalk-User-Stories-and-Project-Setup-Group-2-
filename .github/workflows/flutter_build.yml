@@ -30,7 +30,7 @@ jobs:
 
         #Run tests
       - name: Run Tests
-        run: flutter test --no-pub
+        run: flutter test
 
       - name: Accept Android licenses
         run: yes | flutter doctor --android-licenses
