@@ -7,7 +7,7 @@ class AiInterpreter {
   static bool useCloudflare = true;
 
   // 👉 Change ONLY this URL each time Cloudflare Tunnel gives you a new one
-  static String cloudflareUrl = "https://covered-msgid-pets-ericsson.trycloudflare.com";
+  static String cloudflareUrl = "https://birth-detection-mines-incorporated.trycloudflare.com";
 
   // 👉 Home local network (not used on eduroam)
   static String localUrl = "http://192.168.0.121:8000";
