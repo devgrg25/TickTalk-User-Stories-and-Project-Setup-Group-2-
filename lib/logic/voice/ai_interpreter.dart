@@ -6,7 +6,7 @@ class AiInterpreter {
   static bool useCloudflare = true;
 
   static String cloudflareUrl =
-      "https://agenda-term-against-fate.trycloudflare.com";
+      "https://birth-detection-mines-incorporated.trycloudflare.com";
   static String localUrl = "http://192.168.0.121:8000";
 
   static String get baseUrl => useCloudflare ? cloudflareUrl : localUrl;

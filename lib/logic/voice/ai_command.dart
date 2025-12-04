@@ -57,31 +57,53 @@ class AiCommand {
   final double? valueSeconds;
 
   // --------------------------
-  // Player Mode
+  // Player Mode (single player)
   // --------------------------
-  final int? playerIndex;        // For single-player actions
+  final int? playerIndex;
   final bool? startAll;
   final bool? stopAll;
 
+  // --------------------------
+  // NEW: Player Mode (full mode N players)
+  // --------------------------
+  final int? playerCount;
+
   AiCommand({
     required this.type,
+
+    // Timer
     this.seconds,
     this.label,
+
+    // Interval
     this.workSeconds,
     this.restSeconds,
     this.rounds,
+
+    // Routine
     this.routineName,
     this.autoSave,
     this.autoStart,
     this.steps,
+
+    // Navigation
     this.target,
+
+    // Rename
     this.oldName,
     this.newName,
+
+    // Summary
     this.lapNumber,
     this.valueSeconds,
+
+    // Player mode per-player controls
     this.playerIndex,
     this.startAll,
     this.stopAll,
+
+    // NEW: full mode N players
+    this.playerCount,
   });
 
   factory AiCommand.fromJson(Map<String, dynamic> json) {
@@ -118,13 +140,17 @@ class AiCommand {
 
       // Summary
       lapNumber: json["lapNumber"],
-      valueSeconds:
-      json["valueSeconds"] == null ? null : (json["valueSeconds"] as num).toDouble(),
+      valueSeconds: json["valueSeconds"] == null
+          ? null
+          : (json["valueSeconds"] as num).toDouble(),
 
-      // Player mode
+      // Player mode single-player actions
       playerIndex: json["playerIndex"],
       startAll: json["startAll"],
       stopAll: json["stopAll"],
+
+      // NEW: full mode N players
+      playerCount: json["playerCount"],
     );
   }
 }

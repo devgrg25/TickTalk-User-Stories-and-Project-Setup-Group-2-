@@ -52,6 +52,9 @@ class VoiceRouter {
   bool _isBuildingRoutine = false;
   String? _routineName;
   final List<TimerInterval> _routineSteps = [];
+  // NEW: waiting for user to say "2 players", "4", etc.
+  bool _waitingForPlayerCount = false;
+
 
   // -------------------------------------------------------------
   // MAIN ENTRY
@@ -61,6 +64,26 @@ class VoiceRouter {
     if (input.isEmpty) return;
 
     print("🎤 VoiceRouter received: $raw");
+    // NEW: Local fallback when backend asks "How many players?"
+    if (_waitingForPlayerCount) {
+      final n = _extractNumber(raw);
+      if (n != null && n > 0 && n <= 10) {
+
+        _waitingForPlayerCount = false;
+
+        // navigate to player mode tab
+        onNavigateTab(5);
+
+        // create players
+        PlayerModeManager.instance.createPlayers(n);
+
+        await VoiceTtsService.instance
+            .speak("Starting player mode with $n players.");
+
+        return;
+      }
+    }
+
 
     // 1. Stopwatch local commands
     if (await _handleStopwatchCommands(input)) return;
@@ -88,6 +111,7 @@ class VoiceRouter {
     if (ai != null) return _executeAi(ai);
 
     return VoiceTtsService.instance.speak("Sorry, I cannot handle that yet.");
+
   }
 
   // -------------------------------------------------------------
@@ -226,7 +250,24 @@ class VoiceRouter {
   // AI COMMAND EXECUTION (BACKEND)
   // -------------------------------------------------------------
   Future<void> _executeAi(AiCommand cmd) async {
-    switch (cmd.type) {
+    switch (cmd.type) {      // NEW: Backend asks user for player count
+      case "ask_player_count":
+        _waitingForPlayerCount = true;
+        await VoiceTtsService.instance.speak("How many players?");
+        return;
+
+    // NEW: Backend sends number of players
+      case "start_player_mode":
+        final count = cmd.playerCount ?? 1;
+        _waitingForPlayerCount = false;
+
+        onNavigateTab(5);
+        PlayerModeManager.instance.createPlayers(count);
+
+        await VoiceTtsService.instance
+            .speak("Starting player mode with $count players.");
+        return;
+
     // ---------------------------------------------------------
     // Simple Timer
     // ---------------------------------------------------------
@@ -757,41 +798,25 @@ class VoiceRouter {
   }
 
   String _spokenDuration(int sec) {
-    final h = sec ~/ 3600;
-    final m = (sec % 3600) ~/ 60;
+    final m = sec ~/ 60;
     final s = sec % 60;
 
-    if (h > 0) {
-      if (m > 0) return "$h hours and $m minutes";
-      return "$h hours";
-    }
-    if (m > 0) {
-      if (s > 0) return "$m minutes and $s seconds";
-      return "$m minutes";
-    }
+    if (m > 0 && s > 0) return "$m minutes and $s seconds";
+    if (m > 0) return "$m minutes";
     return "$s seconds";
   }
+
 
   String _spokenDurationFromDuration(Duration d) {
     final totalSec = d.inSeconds;
-    final h = totalSec ~/ 3600;
-    final m = (totalSec % 3600) ~/ 60;
+    final m = totalSec ~/ 60;
     final s = totalSec % 60;
 
-    if (h > 0) {
-      if (m > 0 && s > 0) return "$h hours $m minutes $s seconds";
-      if (m > 0) return "$h hours $m minutes";
-      if (s > 0) return "$h hours $s seconds";
-      return "$h hours";
-    }
-
-    if (m > 0) {
-      if (s > 0) return "$m minutes $s seconds";
-      return "$m minutes";
-    }
-
+    if (m > 0 && s > 0) return "$m minutes and $s seconds";
+    if (m > 0) return "$m minutes";
     return "$s seconds";
   }
+
   // -------------------------------------------------------------
   // LEGACY ROUTINE BUILDER (UNCHANGED FROM YOUR ORIGINAL)
   // -------------------------------------------------------------
@@ -897,6 +922,32 @@ class VoiceRouter {
         caseSensitive: false)
         .firstMatch(input);
     if (hr != null) return int.parse(hr.group(1)!) * 3600;
+
+    return null;
+  }
+  // NEW: Extract numeric value from speech ("4", "four", "team of 3")
+  int? _extractNumber(String text) {
+    text = text.toLowerCase();
+
+    final words = {
+      "one": 1, "first": 1,
+      "two": 2, "second": 2,
+      "three": 3, "third": 3,
+      "four": 4, "fourth": 4,
+      "five": 5, "fifth": 5,
+      "six": 6, "sixth": 6,
+      "seven": 7, "seventh": 7,
+      "eight": 8, "eighth": 8,
+      "nine": 9, "ninth": 9,
+      "ten": 10, "tenth": 10,
+    };
+
+    for (final word in words.keys) {
+      if (text.contains(word)) return words[word];
+    }
+
+    final match = RegExp(r'\b(\d+)\b').firstMatch(text);
+    if (match != null) return int.parse(match.group(1)!);
 
     return null;
   }
