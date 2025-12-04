@@ -19,7 +19,7 @@ class PlayerModeManager {
   final List<StopwatchController> controllers = [];
   final List<List<Duration>> laps = [];
 
-  /// 🔥 NEW — correct callback type (removes your error)
+  /// Callback for when ALL players stop
   void Function(List<PlayerStopwatchSummary>)? onAllPlayersStopped;
 
   // ---------------------------------------------------
@@ -39,20 +39,25 @@ class PlayerModeManager {
   // SINGLE PLAYER ACTIONS
   // ---------------------------------------------------
   void startPlayer(int i) => controllers[i].start();
+
   void pausePlayer(int i) => controllers[i].pause();
+
   void resumePlayer(int i) => controllers[i].resume();
 
   void lapPlayer(int i) {
-    laps[i].insert(0, Duration(milliseconds: controllers[i].elapsedMs));
+    laps[i].insert(
+      0,
+      Duration(milliseconds: controllers[i].elapsedMs),
+    );
   }
 
+  /// ❗ STOP SHOULD NOT RESET NOW
   void stopPlayer(int i) {
     final c = controllers[i];
 
-    c.stop();
-    c.reset();
+    c.stop(); // freeze the time, don't reset
 
-    // ⭐ If last player stopped → summary
+    // if all non-running → summary
     if (_allStopped()) {
       _triggerSummary();
     }
@@ -67,19 +72,23 @@ class PlayerModeManager {
     }
   }
 
+  /// Stop all, then show summary, THEN reset
   void stopAll() {
     for (var c in controllers) {
       c.stop();
-      c.reset();
     }
+
     _triggerSummary();
+
+    _resetAll();
   }
 
   // ---------------------------------------------------
   // CHECK ALL STOPPED
   // ---------------------------------------------------
+  /// ❗ FIXED LOGIC — ONLY CHECK RUN STATE
   bool _allStopped() {
-    return controllers.every((c) => !c.isRunning && c.elapsedMs == 0);
+    return controllers.every((c) => !c.isRunning);
   }
 
   // ---------------------------------------------------
@@ -98,8 +107,25 @@ class PlayerModeManager {
       );
     }
 
+    // 🔥 Send summary to UI
     if (onAllPlayersStopped != null) {
       onAllPlayersStopped!(summaries);
+    }
+
+    // reset after summary
+    _resetAll();
+  }
+
+  // ---------------------------------------------------
+  // INTERNAL RESET
+  // ---------------------------------------------------
+  void _resetAll() {
+    for (var c in controllers) {
+      c.reset();
+    }
+
+    for (var l in laps) {
+      l.clear();
     }
   }
 }
